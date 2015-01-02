@@ -8,11 +8,16 @@
 (defun perceptron (threshold learning-rate training-set testing-set)
   (defparameter *images* (open "~/lisp/perceptron/train-images"))
   (defparameter *labels* (open "~/lisp/perceptron/train-labels"))
+
   (defparameter *threshold* threshold)
   (defparameter *learning-rate* learning-rate)
-  (defparameter *network* (make-neuron-layer 784 10))
-  (training training-set)
-  (print (error-rate testing-set))
+
+  (let ((network (make-neuron-layer 784 10)))
+    ;;training
+    (print (testing (training network training-set)
+		    testing-set)))
+    ;;testing
+    ;;(print (
   (close *images*)
   (close *labels*))
 
@@ -39,24 +44,33 @@
      for x from 0
      when item collect x)))
 
-(defun error-rate (testing-set)
-  (- 100 (* (/ (testing testing-set) testing-set) 100.0)))
+(defun error-rate (success testing-set)
+  (- 100 (* (/ success testing-set) 100.0)))
 
-(defun training (n)
-  (dotimes (x n)
-    (setq *network* (train-network *network*
-				   (next-image *images*)
-				   (label-to-results (next-label *labels*))))))
+(defun training-rec (network training-set)
+  (when (> training-set 0)
+    (training (train-network network
+			     (next-image *images*)
+			     (label-to-results (next-label *labels*)))
+	      (- training-set 1))))
 
-(defun testing (n)
+(defun training (temp training-set)
+  (let ((network temp))
+    (dotimes (x training-set)
+      (setq network (train-network network
+			           (next-image *images*)
+			           (label-to-results (next-label *labels*)))))
+    network))
+
+(defun testing (network testing-set)
   (let ((success 0))
-    (dotimes (x n)
-      (when (equal (results-to-labels (network-output *network* (next-image *images*)))
-		   (list (next-label *labels*)))
-	(setq success (+ success 1))))
-    success))
-
-
+    (dotimes (x testing-set)
+      (when (equal (label-to-results (next-label *labels*))
+		   (network-output network
+				   (next-image *images*)))
+        (setq success (+ 1 success))))
+    (print success)
+    (error-rate success testing-set)))
 
 ;;; Business code
 (defun make-neuron (inputs)
