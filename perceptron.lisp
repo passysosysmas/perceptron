@@ -1,7 +1,7 @@
 ;;;; perceptron.lisp
-
-(in-package #:perceptron)
 (ql:quickload "split-sequence")
+(in-package #:perceptron)
+
 
 ;;; Interface code
 ;;; exemple call :  (perceptron 1 0.2 10000 100)
@@ -13,12 +13,14 @@
 
   ;; Make a network of 2 layers : 784 inputs for the input layer
   ;;                              10 outputs for the output layer                       
-  ;;(defparameter *network* (list (make-neuron-layer 784 hidden-neurons)
-  ;;				(make-neuron-layer hidden-neurons 10)))
-  (defparameter *network* (list (make-neuron-layer 784 hidden-neurons)))
-				
-  (training training-set)
-  (print (error-rate testing-set))
+  (let ((network (list (make-neuron-layer 784 hidden-neurons)
+  		       (make-neuron-layer hidden-neurons 10))))
+  ;;(let ((network (list(make-neuron-layer 784 hidden-neurons))))
+    (print "TRAINING")
+    (time (setq network (training network training-set)))
+    (print "TESTING")
+    (time (print (error-rate network testing-set))))
+
   (close *images*)
   (close *labels*))
 
@@ -48,25 +50,26 @@
 
 (defun results-to-labels (results)
   ;; the number with the highest output is considered to be the right answer
+  ;; TODO: low priority, probably suboptimal alogrithm but only runned once/test
   (position (reduce #'max results) results))
 
-(defun error-rate (testing-set)
-  (- 100 (* (/ (testing testing-set) testing-set) 100.0)))
+(defun error-rate (network testing-set)
+  (- 100 (* (/ (testing network testing-set) testing-set) 100.0)))
 
-(defun training (n)
+(defun training (network n)
   (let ((inputs nil))
     (dotimes (x n)
       (setq inputs (next-image *images*))
-      (setq *network* (list (backtracking *network*
-				          inputs
-				          (compute-error (network-output *network*
-								         inputs)
-						         (label-to-results (next-label *labels*)))))))))
-						       
-(defun testing (n)
+      (setq network (backtracking  network
+				   inputs
+				   (network-output network inputs)
+				   (label-to-results (next-label *labels*))))))
+  network)
+
+(defun testing (network n)
   (let ((success 0))
     (dotimes (x n)
-      (when (equal (results-to-labels (network-output *network* (next-image *images*)))
+      (when (equal (results-to-labels (network-output network (next-image *images*)))
 		   (next-label *labels*))
 	(setq success (+ success 1))))
     success))
@@ -99,12 +102,53 @@
   ;; Using logistic function
   (/ 1 (+ 1 (exp (* -1 weighted-sum)))))
 
+(defun output-error (output-values expected-values)
+  (list(map 'vector
+       #'-
+       output-values
+       expected-values)))
+  
+;;; Network : list of layers
+;;; Layer : vector of neurons
+;;; Neuron : vector of weights
 
 ;;; Backtracking
-(defun backtracking (network input-values errors)
-  (backtracking-layer (car network) input-values errors))
+(defun backtracking (network input-values output-values expected-values)
+  (map 'vector
+       #'(lambda (layer error-network)
+	   (map 'vector #'(lambda (neuron error-layer)
+			       (map 'vector #'(lambda (weight input-value error-neuron)
+						(+ weight (* -1
+						             *learning-rate*
+						             error-neuron
+						             input-value)))
+				    neuron
+				    input-values
+				    error-layer))
+		     layer
+		     error-network))
+	  network
+	  (backtracking-network network
+				input-values
+				(output-error output-values expected-values))))))
+
+(defun backtracking-network (network input-values errors)
+  (let ((backtracking (backtracking-layer (car network)
+					  input-values
+					  (car errors))))
+    (if (cadr network)
+      (push (backtracking-network (cdr network)
+				  (layer-output (car network)
+					        input-values)
+				  backtracking)
+	    backtracking)
+      (list backtracking))))
+      
+
+
 
 (defun backtracking-layer (layer input-values errors)
+  (print errors)
     (map 'vector
 	 (lambda (neuron error) (backtracking-neuron neuron
 						     input-values
@@ -113,21 +157,8 @@
          errors))
 
 (defun backtracking-neuron (neuron input-values error)
-  (let ((pdaf (pdaf (weighted-sum neuron input-values))))
-    (map 'vector
-         (lambda (weight input-value) (+ weight
-					 (delta-weight pdaf input-value error)))
-	 neuron
-	 input-values)))
-				   
-(defun compute-error (network-outputs expected-outputs)
-  (map 'vector
-       #'-
-       network-outputs
-       expected-outputs))
-
-(defun delta-weight (pdaf input-value error)
-  (* -1 *learning-rate* error pdaf input-value))
+  ;; error multiplied by the partial derivative of the activation function
+  (* error (pdaf (weighted-sum neuron input-values)))))
   
 (defun pdaf (weighted-sum)
   ;; partial derivative of the activation function
