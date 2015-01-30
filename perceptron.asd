@@ -7,5 +7,8 @@
   :serial t
   :depends-on (#:split-sequence)
   :components ((:file "package")
-               (:file "perceptron")))
+               (:file "perceptron")
+	       (:file "backtracking")
+	       (:file "concepts")
+	       (:file "image")))
 
