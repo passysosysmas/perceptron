@@ -3,7 +3,7 @@
 (asdf:defsystem #:perceptron
   :description "This package allows building of perceptrons that are able to learn and recognize concepts"
   :author "Your Name <yenda1@gmail.com>"
-  :license "GNU/GPL3"
+  :license "MIT"
   :serial t
   :depends-on (#:split-sequence)
   :components ((:file "package")
