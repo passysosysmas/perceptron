@@ -1,4 +1,4 @@
-(declaim (optimize (speed 3) (safety ) (debug 0)))
+(declaim (optimize (speed 3) (safety 0) (debug 0)))
 ;; add evolutionary strategies for learning rate
 
 ;;;; perceptron.lisp
@@ -23,11 +23,9 @@
 	 (training-set 1000) (testing-set 100)
 	 (threshold 0.8) (quadratic-limit 0.07))
     (mapcar (lambda (concept)
-		(perceptron (best-perceptron network-config concept activation-function
-					     learning-rates threshold training-set
-					     testing-set quadratic-limit)
-			    concept activation-function learning-rates threshold
-			    training-set testing-set quadratic-limit))
+	      (best-perceptron network-config concept activation-function
+			       learning-rates threshold training-set
+			       testing-set quadratic-limit))
 	    concepts)))
 
 (defun network (layers) 
@@ -232,6 +230,7 @@
 ;;; EXEMPLES
 
 ;;; To show the output of the networks-set for a given input (reload streams first) :
+;;;(refresh-streams "8"
 ;;;(networks-set-output *networks-set* '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9") (cdr (next-concept T "8")))
 
 ;;; To see how ugly the images are :

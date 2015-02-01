@@ -42,12 +42,3 @@
 	(read-sequence next-concept
 		       (if valid *concepts* *not-concepts*))))
     (cons valid next-concept)))
-
-
-(defun next-concept (valid concept &optional testing)
-  ;; input : a concept like "a" or "0"
-  ;; ugly part : feeds on external streams and reload them when reaching EOF
-  ;; output : an adapted representation of a valid input representing the concept
-  (let ((next-concept (make-sequence 'list 784)))
-    (read-sequence next-concept (if valid *concepts* *not-concepts*))
-    (cons valid next-concept)))))
