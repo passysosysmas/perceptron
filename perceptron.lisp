@@ -1,4 +1,4 @@
-(declaim (optimize (speed 0) (safety 3) (debug 3)))
+(declaim (optimize (speed 3) (safety ) (debug 0)))
 ;; add evolutionary strategies for learning rate
 
 ;;;; perceptron.lisp
@@ -231,7 +231,7 @@
 
 ;;; EXEMPLES
 
-;;; To show the output of the networks-set for a given input :
+;;; To show the output of the networks-set for a given input (reload streams first) :
 ;;;(networks-set-output *networks-set* '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9") (cdr (next-concept T "8")))
 
 ;;; To see how ugly the images are :
