@@ -1,10 +1,13 @@
 (in-package #:perceptron)
 
-;;;; Use the following commands to generate the test files (carefull with pathnames,
-;;;; you might want to change them
+;;;; This file contains the functions related to the generation of binary image files
+;;;; for the perceptron to process
+;;;; There is also few functions to display various data related to the images/network
 
 
 (defun generate-files ()
+  ;;; Use the following commands to generate the test files (carefull with pathnames,
+  ;;; you might want to change them
   (sort-images-by-labels '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
   (sort-test-images-by-labels '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9")))
 
@@ -43,6 +46,7 @@
 	    label-set))
 
 (defun sort-images (stream not-stream images image-labels label)
+  ;;; 
   (let ((image (read-line images nil))
 	(image-label (read-line image-labels nil)))
     (when (and image image-label)
@@ -51,7 +55,7 @@
       (sort-images stream not-stream images image-labels label))))
 
 (defun next-image-extraction (image)
-  ;;; 
+  ;;; extracts the bitmap from the string and returns a list of integers
   (loop :for (integer position) := (multiple-value-list 
 				    (parse-integer image
                                                    :start (or position 0)
