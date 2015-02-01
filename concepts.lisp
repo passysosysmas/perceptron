@@ -41,4 +41,4 @@
 	(refresh-stream valid concept (if testing testing))
 	(read-sequence next-concept
 		       (if valid *concepts* *not-concepts*))))
-    (cons valid next-concept)))
+    (cons valid (mapcar (lambda (x) (/ x 255.0)) next-concept))))

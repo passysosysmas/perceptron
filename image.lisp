@@ -51,18 +51,51 @@
       (sort-images stream not-stream images image-labels label))))
 
 (defun next-image-extraction (image)
-    (loop :for (integer position) := (multiple-value-list 
-				      (parse-integer image
+  ;;; 
+  (loop :for (integer position) := (multiple-value-list 
+				    (parse-integer image
                                                    :start (or position 0)
                                                    :junk-allowed t))
-        :while integer
-       :collect integer))
+     :while integer
+     :collect integer))
 
 
 (defun display-image (image)
+  ;;; print the given image in *standard-output*
   (let ((x 0))
     (loop for pixel in image
        do (incf x)
-	 (format t "~a" (if (eq 0 pixel) "." "#"))
+	 (format t "~a" (if (< 0.01 pixel) "." "#"))
 	 (when (eq 0 (mod x 28))
 	   (format t "~%")))))
+
+(defun display-average-image (concept)
+  ;;; print the average form of 100 images of the same concept
+  ;;; basically, it prints a potatoe
+  (refresh-streams concept)
+  (let ((average-concept (make-sequence 'list 784 :initial-element 0)))
+    (dotimes (x 100)
+      (setq average-concept (mapcar #'+
+				    average-concept
+				    (cdr (next-concept T concept)))))
+    (display-image (mapcar (lambda (pixel) (/ pixel 100))
+			      average-concept))))
+
+(defun network-to-console ()
+  ;;; print the trained network in *standard-output*
+  (let ((image (cdaar (cadr *networks-set*))))
+    (display-image image))))
+
+(defun network-to-file ()
+  ;;; copy the trained network into a js file (in json format)
+  (with-open-file (stream "lisp/perceptron/images/perceptron.js"
+			  :direction :output
+			  :if-exists :overwrite
+			  :if-does-not-exist :create )
+    (format stream "var perceptron = ")
+    (write-char #\{ stream)
+    (mapcar (lambda (perceptron label)
+	      (format stream "\"~a\": [~{~a~^, ~}], " label (cdaar perceptron)))
+	    *networks-set*
+	    '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
+    (write-char #\} stream)))

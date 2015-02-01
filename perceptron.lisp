@@ -39,7 +39,7 @@
 (defun layer (inputs outputs)
   ;;; a list of neurons
   (if (> outputs 0)
-      (cons (neuron (+ 1 inputs))
+      (cons (neuron (+ 1 inputs)) ;; adding a weight for the bias
 	    (layer inputs (- outputs 1)))))
 
 (defun neuron (inputs)
@@ -63,7 +63,7 @@
 	  (setq best-network current-network))))
     (perceptron best-network
 		concept activation-function '(0.3) threshold
-		training-set testing-set quadratic-limit)
+		(* training-set 50) testing-set quadratic-limit)
     best-network))
 
 (defun perceptron (network concept activation-function learning-rates threshold
@@ -135,9 +135,8 @@
 							     (cdr next-concept))))
 		  (when (equal network-output concept)
 		    (incf success))))
-	      (when t
-		(format t "Concept: ~a~12t Error rate: ~a%~%"
-			concept (* (- 1 (/ success n)) 100.0)))))
+	      (format t "Concept: ~a~12t Error rate: ~a%~%"
+		      concept (* (- 1 (/ success n)) 100.0))))
 	  concepts))
 
 (defun testing-perceptron (network concept threshold n)
@@ -199,7 +198,7 @@
   ;;; input a list of weights and valid input
   ;;; hadoop or whatever distribited magic should be used here and there for the rise of Skynet
   ;;; output : the weighted sum
-  (push 1 input )
+  (push 1 input ) ;; bias
   (+ (reduce #'+ (mapcar #'* neuron input))))
 
 (defun activation-function (weighted-sum)
