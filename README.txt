@@ -14,7 +14,7 @@ ln -s ~/path/to/my/projects ~/.local/share/common-lisp/source/
 Now in the REPL :
 
 To load project type :
-(ql:quickstart "percptron")
+(ql:quickstart "perceptron")
 
 To load package type :
 (in-package perceptron)
@@ -22,7 +22,9 @@ To load package type :
 
 
 
-To format the train-labels and train-images
+To format the train-labels and train-images :
+
+In command line :
 
 sed '1,10000!d' train-images > test-images
 sed '10001,60000!d' train-images > train-images-2
@@ -36,20 +38,6 @@ mv test-images ~/lisp/perceptron/images/test/test-images
 mv train-labels-2 ~/lisp/perceptron/images/train-labels
 mv train-images-2 ~/lisp/perceptron/images/train-images
 
-on utilise cette fonction modifiée pour générer les fichiers de test
+Then in the REPL :
 
-(defun sort-images-by-labels (label-set)
-    (mapcar #'(lambda (label)
-	       (with-open-file (images (open "~/lisp/perceptron/images/test/test-images"))
-		 (with-open-file (image-labels (open "~/lisp/perceptron/images/test/test-labels"))
-		   (with-open-file (stream  (format nil "lisp/perceptron/images/test/~a" label)
-					    :direction :output
-					    :if-exists :overwrite
-					    :if-does-not-exist :create )
-		     (with-open-file (not-stream  (format nil "lisp/perceptron/images/test/not-~a" label)
-						  :direction :output
-						  :if-exists :overwrite
-						  :if-does-not-exist :create )
-		       (sort-images stream not-stream images image-labels label))))))
-	    label-set))
-
+(generate-files)
