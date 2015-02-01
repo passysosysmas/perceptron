@@ -1,5 +1,6 @@
 ;;;; package.lisp
 
 (defpackage #:perceptron
-  (:use #:cl))
+  (:use #:cl)
+  (:shadowing-import-from #:split-sequence))
 
