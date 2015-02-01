@@ -1,4 +1,5 @@
 ;;; Functions related to backtracking
+(declaim (optimize (speed 3) (safety 0) (debug 0)))
 
 (in-package #:perceptron)
 

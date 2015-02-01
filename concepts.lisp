@@ -42,3 +42,10 @@
 	(read-sequence next-concept
 		       (if valid *concepts* *not-concepts*))))
     (cons valid (mapcar (lambda (x) (/ x 255.0)) next-concept))))
+
+(defun unknown-concept (stream)
+  (let ((next-concept (make-sequence 'list 784)))
+    (read-sequence next-concept stream)
+    next-concept))
+    
+  

@@ -1,3 +1,5 @@
+(declaim (optimize (speed 3) (safety 0) (debug 0)))
+
 (in-package #:perceptron)
 
 ;;;; This file contains the functions related to the generation of binary image files
@@ -9,40 +11,29 @@
   ;;; Use the following commands to generate the test files (carefull with pathnames,
   ;;; you might want to change them
   (sort-images-by-labels '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
-  (sort-test-images-by-labels '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9")))
+  (sort-images-by-labels '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9") T))
 
-(defun sort-test-images-by-labels (label-set)
+(defun sort-images-by-labels (label-set &optional testing)
     (mapcar #'(lambda (label)
-	       (with-open-file (images (open "~/lisp/perceptron/images/test/test-images"))
-		 (with-open-file (image-labels (open "~/lisp/perceptron/images/test/test-labels"))
-		   (with-open-file (stream  (format nil "lisp/perceptron/images/test/~a" label)
-					    :element-type '(unsigned-byte 8)
-					    :direction :output
-					    :if-exists :overwrite
-					    :if-does-not-exist :create )
-		     (with-open-file (not-stream  (format nil "lisp/perceptron/images/test/not-~a" label)
-						  :element-type '(unsigned-byte 8)
-						  :direction :output
-						  :if-exists :overwrite
-						  :if-does-not-exist :create )
-		       (sort-images stream not-stream images image-labels label))))))
-	    label-set))
-
-(defun sort-images-by-labels (label-set)
-    (mapcar #'(lambda (label)
-	       (with-open-file (images (open "~/lisp/perceptron/images/train-images"))
-		 (with-open-file (image-labels (open "~/lisp/perceptron/images/train-labels"))
-		   (with-open-file (stream  (format nil "lisp/perceptron/images/~a" label)
-					    :element-type '(unsigned-byte 8)
-					    :direction :output
-					    :if-exists :overwrite
-					    :if-does-not-exist :create )
-		     (with-open-file (not-stream  (format nil "lisp/perceptron/images/not-~a" label)
-						  :element-type '(unsigned-byte 8)
-						  :direction :output
-						  :if-exists :overwrite
-						  :if-does-not-exist :create )
-		       (sort-images stream not-stream images image-labels label))))))
+		(with-open-file (images (if testing
+					    (open "~/lisp/perceptron/images/test/test-images")
+					    (open "~/lisp/perceptron/images/train-images")))
+		  (with-open-file (image-labels (if testing
+						    (open "~/lisp/perceptron/images/test/test-labels")
+						    (open "~/lisp/perceptron/images/train-labels")))
+		    (with-open-file (stream  (format nil "lisp/perceptron/images/~a~a"
+						     (if testing "test/" "") label)
+					     :element-type '(unsigned-byte 8)
+					     :direction :output
+					     :if-exists :overwrite
+					     :if-does-not-exist :create )
+		      (with-open-file (not-stream  (format nil "lisp/perceptron/images/test/not-~a"
+							   (if testing "test/" "") label)
+						   :element-type '(unsigned-byte 8)
+						   :direction :output
+						   :if-exists :overwrite
+						   :if-does-not-exist :create )
+			(sort-images stream not-stream images image-labels label))))))
 	    label-set))
 
 (defun sort-images (stream not-stream images image-labels label)
@@ -88,7 +79,7 @@
 (defun network-to-console ()
   ;;; print the trained network in *standard-output*
   (let ((image (cdaar (cadr *networks-set*))))
-    (display-image image))))
+    (display-image image)))
 
 (defun network-to-file ()
   ;;; copy the trained network into a js file (in json format)

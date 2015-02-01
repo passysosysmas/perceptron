@@ -63,7 +63,7 @@
 	  (setq best-network current-network))))
     (perceptron best-network
 		concept activation-function '(0.3) threshold
-		(* training-set 50) testing-set quadratic-limit)
+		(* training-set 100) testing-set quadratic-limit)
     best-network))
 
 (defun perceptron (network concept activation-function learning-rates threshold
