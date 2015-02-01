@@ -20,8 +20,9 @@
 	  layer-gradients))
 
 (defun backtracking-neuron (neuron inputs gradient)
+  (push 1 inputs)
   (let ((delta-weights (mapcar (lambda (input)
-				 (* *learning-rate* gradient input (+ 1 *momentum*)))  
+				 (* *learning-rate* gradient input))  
 			       inputs)))
     (mapcar #'+ neuron delta-weights)))
 

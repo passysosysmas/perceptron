@@ -3,63 +3,51 @@
 
 (in-package #:perceptron)
 
-(defun test-concept (valid concept)
-  (defparameter *concepts* (open (format nil "~a~a" *pathname* concept)))
-  (defparameter *not-concepts* (open (format nil "~anot-~a" *pathname* concept))) 
-  (let ((next-concept (next-concept valid concept)))
-    (close *concepts*)
-    (close *not-concepts*)
-    next-concept))
-  )
-
-(defun refresh-stream (valid concept)
+(defun refresh-stream (valid concept &optional testing)
   ;;; close and reopen a stream
   ;;; used when reaching EOF
   (if valid (close *concepts*) (close *not-concepts*))
   (if valid
       (setq *concepts*
-	    (open (format nil "~a~a~a" *pathname* (or *testing* "") concept)))
+	    (open (format nil "~a~a~a" *pathname* (if testing "test/" "") concept)
+		  :element-type '(unsigned-byte 8)))
       (setq *not-concepts*
-	    (open (format nil "~a~anot-~a" *pathname* (or *testing* "") concept)))))
+	    (open (format nil "~a~anot-~a" *pathname* (if testing "test/" "") concept)
+		  :element-type '(unsigned-byte 8)))))
 
-(defun refresh-streams (concept)
+(defun refresh-streams (concept &optional testing)
   ;;; refreshing both streams at the same time
   ;;; used when testing (needs different set of concepts)
-  (refresh-stream 'T concept)
-  (refresh-stream nil concept))
+  (refresh-stream 'T concept testing)
+  (refresh-stream nil concept testing))
 
-(defun next-random-concept (concept positive-rate)
+(defun next-random-concept (concept positive-rate &optional testing)
   ;; returns a valid input of something representing the concept or not depending
   ;; of the random number. that way you can submit more right or more wrong by changing positive-rate
   (if (< (random 1.0) positive-rate)
-      (next-concept T concept)
-      (next-concept nil concept)))
+      (next-concept T concept (if testing testing))
+      (next-concept nil concept (if testing testing))))
 
-
-(defun next-concept (valid concept)
+(defun next-concept (valid concept &optional testing)
   ;; input : a concept like "a" or "0"
   ;; ugly part : feeds on external streams and reload them when reaching EOF
   ;; output : an adapted representation of a valid input representing the concept
-  (let ((next-concept nil))
-    (handler-case (setq next-concept (read-line (if valid *concepts* *not-concepts*)))
+  (let ((next-concept (make-sequence 'list 784)))
+    (handler-case (when (eq 0 (read-sequence next-concept
+					     (if valid *concepts* *not-concepts*)))
+		    (refresh-stream valid concept (if testing testing))
+		    (return-from  next-concept (next-concept valid concept (if testing testing))))
       (stream-error ()
-	(refresh-stream valid concept)
-	(setq next-concept (read-line (if valid *concepts* *not-concepts*)))))
-    (cons valid (next-concept-extraction-image next-concept))))
+	(refresh-stream valid concept (if testing testing))
+	(read-sequence next-concept
+		       (if valid *concepts* *not-concepts*))))
+    (cons valid next-concept)))
 
 
-(defun next-concept-extraction-image (next-concept)
-  ;; input : a representation of a concept (string of 784 space separated integers between 0 and 255)
-  ;; output : a representation of a concept (vector of 784 real numbers between 0 and 1)
-  (mapcar #'(lambda (x) (/ (parse-integer x) 255.0))
-	  (split-sequence:split-sequence #\Space
-					 next-concept
-					 :remove-empty-subseqs t)))
-
-(defun next-concept-extraction-bool (next-concept)
-  ;; input : a representation of a concept (string of 784 space separated integers between 0 and 255)
-  ;; output : a representation of a concept (vector of 784 real numbers between 0 and 1)
-  (mapcar #'(lambda (x) (parse-integer x))
-	  (split-sequence:split-sequence #\Space
-					 next-concept
-					 :remove-empty-subseqs t)))
+(defun next-concept (valid concept &optional testing)
+  ;; input : a concept like "a" or "0"
+  ;; ugly part : feeds on external streams and reload them when reaching EOF
+  ;; output : an adapted representation of a valid input representing the concept
+  (let ((next-concept (make-sequence 'list 784)))
+    (read-sequence next-concept (if valid *concepts* *not-concepts*))
+    (cons valid next-concept)))))
