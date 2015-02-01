@@ -236,4 +236,3 @@
 
 ;;; To see how ugly the images are :
 ;;; (loop for i from 1 to 10 do (display-image (cdr (next-concept T "8"))))
-
