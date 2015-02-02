@@ -13,21 +13,22 @@
 
 (defun main ()
   (defparameter *concepts-labels* '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
+  (defparameter *network-config* '(784))
   (defparameter *verbose* nil)
   (defparameter *pathname* "lisp/perceptron/images/")
-  (let ((network-config '(784))
+  (let ((network-config *network-config*)
 	(concepts  *concepts-labels*)
 	(activation-function "logistic")
-	(learning-rates '(0.05))
-	(training-set 1000000) (testing-set 1000)
-	(threshold 0.8) (quadratic-limit 0.2))
+	(learning-rates '(0.5)) (momentum 0.1)
+	(training-set 100000) (testing-set 10)
+	(threshold 0.8) (quadratic-limit 0.15))
     (open-streams concepts)
     (let ((networks-set (networks-set network-config concepts activation-function
-				      learning-rates threshold training-set
+				      learning-rates  momentum threshold training-set
 				      testing-set quadratic-limit)))
       (testing-networks-set networks-set concepts testing-set)
       (defparameter *networks-set* networks-set))
-    (network-to-file)
+    (network-to-file network-config (car learning-rates) momentum quadratic-limit )
     (close *unknown*)
     (unknown-concept-stream)
     (close-streams)))
@@ -38,13 +39,13 @@
     (networks-set-output *networks-set* *concepts-labels* (cdr concept))))
 
 (defun networks-set (network-config concepts
-		     activation-function learning-rates
+		     activation-function learning-rates momentum
 		     threshold training-set testing-set quadratic-limit )
   ;;; generates a set of 10 perceptrons for the network
   (let* ((network-set ()))
     (dotimes (position (length concepts))
       (push (best-perceptron network-config concepts position activation-function
-			     learning-rates threshold training-set
+			     learning-rates momentum threshold training-set
 			     testing-set quadratic-limit)
 	    network-set))
     (reverse network-set)))
@@ -70,14 +71,14 @@
       (cons (random 1.0 )
 	    (neuron (- inputs 1)))))
 
-(defun best-perceptron (network-config concepts position activation-function learning-rates threshold
-			training-set testing-set quadratic-limit)
+(defun best-perceptron (network-config concepts position activation-function learning-rates momentum
+			threshold training-set testing-set quadratic-limit)
   ;;; an exemple of what can be done with the perceptron
   (let ((best-network nil) (best-error-rate -1))
     (dotimes (x 1)
       (let* ((current-network (perceptron (network network-config)
 					  concepts position activation-function
-					  learning-rates threshold
+					  learning-rates momentum threshold
 					  training-set testing-set
 					  quadratic-limit))
 	     (recall (cdr (testing-perceptron current-network concepts position
@@ -86,12 +87,12 @@
 	  (setq best-error-rate recall)
 	  (setq best-network current-network))))
     (perceptron best-network
-		concepts position activation-function '(0.35) threshold
+		concepts position activation-function '(0.35) momentum threshold
 		(* training-set 0) testing-set quadratic-limit)
     best-network))
 
-(defun perceptron (network concepts position activation-function learning-rates threshold
-		   training-set testing-set &optional (quadratic-limit 0))
+(defun perceptron (network concepts position activation-function learning-rates momentum threshold
+		   training-set testing-set quadratic-limit)
   ;;; inputs : configuration for a perceptron
   ;;; outputs : trained network
   (defparameter *activation-function* activation-function)
@@ -100,6 +101,7 @@
 					   concepts
 					   position
 					   learning-rate
+					   momentum
 					   training-set
 					   quadratic-limit))
        (when *verbose*
@@ -107,29 +109,39 @@
 		 (testing-perceptron network concepts position threshold testing-set))))
   network)
 
-(defun training-perceptron (network concepts position learning-rate n quadratic-limit)
+(defun training-perceptron (network concepts position learning-rate momentum n quadratic-limit)
   ;;; inputs : a network and a concept, n the number of cycles
   ;;; runs n time the backtracking algorithm on a compatible representation of a
   ;;; representation of the concept AND a compatible representation of something that is
   ;;; not a representation of the concept, using new reprensations at each cycle.
   ;;; outputs : a trained network
   (defparameter *learning-rate* learning-rate)
-  (with-open-file (file (format nil "lisp/perceptron/quadratic-error/~a-~a-~a.csv"
-				(nth position concepts) n *learning-rate*)
+  (with-open-file (file (format nil "lisp/perceptron/quadratic-error/~{~a~^-~}/~a-~a-~a-~a.csv"
+				*network-config* (nth position concepts)
+				*learning-rate* momentum quadratic-limit)
 			:direction :output :if-exists :overwrite :if-does-not-exist :create )
-    (let ((quadratic-error-sum 0))
+    (let ((quadratic-error-sum 0)
+	  (evolution-quadratic-error-sum 0))
+      ;;; most of the time is spent in this loop, increasing as with the number of iterataions
+      ;;; about 1 000 000 processor cycles are spent here
       (dotimes (x n)
 	(let* ((random-concept (next-random-concept concepts position 0.5))
+	       ;; about 600 000 here
 	       (network-output (network-output network (cdr random-concept)))
+	       ;; about 4000 here
 	       (network-error (network-error (car network-output)
 					     (equal (nth position concepts)
 						    (write-to-string (car random-concept)))))
+	       ;; about 4000 here
 	       (quadratic-error (quadratic-error (car network-output)
 						 (equal (nth position concepts)
 							(write-to-string (car random-concept)))))
+	       ;; about 1000
 	       (sqrt-mqe (sqrt-mqe quadratic-error-sum x)))
 	  (incf quadratic-error-sum quadratic-error)
+	  (incf evolution-quadratic-error-sum quadratic-error)
 	  ;; save medium QE to a file
+	  ;; about 16000, but writing in a file, might be a bottleneck
 	  (format file "~a,~a~%"  sqrt-mqe network-error)
 	  ;; start backtracking
 	  (setq network
@@ -137,11 +149,15 @@
 			      (append (list (cdr random-concept))
 				      (cdr network-output))
 			      network-error))
-	  (when (and (> x 100) (> quadratic-limit sqrt-mqe))
-	    (when *verbose*
-	      (format t "Quadratic limit reached~%Iterations: ~a~%" x))
+	  (when (and (> x 100)(> quadratic-limit sqrt-mqe))
 	    (format t "~a reaching quadratic error after ~a iterations~%" (nth position concepts) x)
 	    (return-from training-perceptron network))
+	  (when (eq 0 (mod x 100))
+	    (if (> (/ evolution-quadratic-error-sum 100)
+		     sqrt-mqe)
+		(incf *learning-rate* (/ momentum 100))
+		(decf *learning-rate* (/ momentum 100)))
+	    (setf evolution-quadratic-error-sum 0))
 	  (when *verbose*
 	    (format t "Max iterations reached~%(sqrt MQE) : ~a~%~%"
 		    (sqrt-mqe quadratic-error-sum n)))))))

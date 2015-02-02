@@ -101,16 +101,23 @@
   ;;; print the trained network in *standard-output*
   (display-image (cdaar (nth position *networks-set*))))
 
-(defun network-to-file ()
+(defun network-to-file (network-config learning-rate momentum quadratic-limit)
   ;;; copy the trained network into a js file (in json format)
-  (with-open-file (stream "lisp/perceptron/perceptron.js"
+  (with-open-file (stream "lisp/perceptron/js/perceptron.js"
 			  :direction :output
 			  :if-exists :overwrite
 			  :if-does-not-exist :create )
-    (format stream "var perceptron = ")
-    (write-char #\{ stream)
+    (with-open-file (backup (format nil "lisp/perceptron/js/perceptron-~{~a-~}~a-~a-~a.js"
+				  network-config learning-rate momentum quadratic-limit)
+			  :direction :output
+			  :if-exists :overwrite
+			  :if-does-not-exist :create )
+    (format stream "var perceptron = {")
+    (format backup "var perceptron = {")
     (mapcar (lambda (perceptron label)
-	      (format stream "\"~a\": [~{~a~^, ~}], " label (cdaar perceptron)))
+	      (format stream "\"~a\": [~{~a~^, ~}], " label (cdaar perceptron))
+	      (format backup "\"~a\": [~{~a~^, ~}], " label (cdaar perceptron)))
 	    *networks-set*
 	    '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
-    (write-char #\} stream)))
+    (write-char #\} stream)
+    (write-char #\} backup))))
