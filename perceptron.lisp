@@ -1,4 +1,4 @@
-(declaim (optimize (speed 3) (safety 0) (debug 0)))
+(declaim (optimize (speed 0) (safety 3) (debug 3)))
 ;; add evolutionary strategies for learning rate
 
 ;;;; perceptron.lisp
@@ -9,24 +9,26 @@
   (defparameter *verbose* nil)
   (defparameter *pathname* "lisp/perceptron/images/")
   (let ((concepts  '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9")))
-    (defparameter *concepts* (open (format nil "~a~a" *pathname* (car concepts))))
-    (defparameter *not-concepts* (open (format nil "~anot-~a" *pathname* (car concepts))))
+    (open-streams concepts)
     (let ((networks-set (networks-set concepts)))
       (testing-networks-set networks-set concepts 100)
-      (defparameter *networks-set* networks-set))))
+      (defparameter *networks-set* networks-set))
+    (close-streams)))
 
 (defun networks-set (concepts)
   ;;; generates a set of 10 perceptrons for the network
-  (let* ((network-config '(784))
+  (let* ((network-config '(784 3))
 	 (activation-function "logistic")
-	 (learning-rates '(0.5 0.3))
-	 (training-set 1000) (testing-set 100)
-	 (threshold 0.8) (quadratic-limit 0.07))
-    (mapcar (lambda (concept)
-	      (best-perceptron network-config concept activation-function
-			       learning-rates threshold training-set
-			       testing-set quadratic-limit))
-	    concepts)))
+	 (learning-rates '(0.3))
+	 (training-set 10000) (testing-set 100)
+	 (threshold 0.8) (quadratic-limit 0.07)
+	 (network-set ()))
+    (dotimes (position (length concepts))
+      (push (best-perceptron network-config concepts position activation-function
+			     learning-rates threshold training-set
+			     testing-set quadratic-limit)
+	    network-set))
+    (reverse network-set)))
 
 (defun network (layers) 
   ;;; input : list of the number of inputs for each neuron layer
@@ -39,7 +41,7 @@
 (defun layer (inputs outputs)
   ;;; a list of neurons
   (if (> outputs 0)
-      (cons (neuron (+ 1 inputs)) ;; adding a weight for the bias
+      (cons (cons 1 (neuron inputs)) ;; adding a weight for the bias
 	    (layer inputs (- outputs 1)))))
 
 (defun neuron (inputs)
@@ -49,41 +51,44 @@
       (cons (random 1.0 )
 	    (neuron (- inputs 1)))))
 
-(defun best-perceptron (network-config concept activation-function learning-rates threshold
+(defun best-perceptron (network-config concepts position activation-function learning-rates threshold
 			training-set testing-set quadratic-limit)
   ;;; an exemple of what can be done with the perceptron
-  (let ((best-network nil) (best-error-rate 1000))
-    (dotimes (x 10)
+  (let ((best-network nil) (best-error-rate -1))
+    (dotimes (x 1)
       (let* ((current-network (perceptron (network network-config)
-					  concept activation-function learning-rates threshold
-					  training-set testing-set quadratic-limit))
-	     (current-error-rate (testing-perceptron current-network concept threshold testing-set)))
-	(when (< current-error-rate best-error-rate)
-	  (setq best-error-rate current-error-rate)
+					  concepts position activation-function
+					  learning-rates threshold
+					  training-set testing-set
+					  quadratic-limit))
+	     (precision (car (testing-perceptron current-network concepts position
+						 threshold testing-set))))
+	(when (> precision best-error-rate)
+	  (setq best-error-rate precision)
 	  (setq best-network current-network))))
     (perceptron best-network
-		concept activation-function '(0.3) threshold
-		(* training-set 100) testing-set quadratic-limit)
+		concepts position activation-function '(0.35) threshold
+		(* training-set 0) testing-set quadratic-limit)
     best-network))
 
-(defun perceptron (network concept activation-function learning-rates threshold
-		   training-set testing-set &optional quadratic-limit)
+(defun perceptron (network concepts position activation-function learning-rates threshold
+		   training-set testing-set &optional (quadratic-limit 0))
   ;;; inputs : configuration for a perceptron
   ;;; outputs : trained network
   (defparameter *activation-function* activation-function)
   (loop for learning-rate in learning-rates
      do (setq network (training-perceptron network
-					   concept
+					   concepts
+					   position
 					   learning-rate
 					   training-set
 					   quadratic-limit))
        (when *verbose*
-	 (format t "Error rate of ~a% with learning rate of ~a~%"
-		 (testing-perceptron network concept threshold testing-set)
-		 learning-rate)))
+	 (format t "Error rate of ~a%~%"
+		 (testing-perceptron network concepts position threshold testing-set))))
   network)
 
-(defun training-perceptron (network concept learning-rate n &optional (quadratic-limit 0))
+(defun training-perceptron (network concepts position learning-rate n quadratic-limit)
   ;;; inputs : a network and a concept, n the number of cycles
   ;;; runs n time the backtracking algorithm on a compatible representation of a
   ;;; representation of the concept AND a compatible representation of something that is
@@ -91,14 +96,18 @@
   ;;; outputs : a trained network
   (defparameter *learning-rate* learning-rate)
   (with-open-file (file (format nil "lisp/perceptron/quadratic-error/~a-~a-~a.csv"
-				concept n *learning-rate*)
+				(nth position concepts) n *learning-rate*)
 			:direction :output :if-exists :overwrite :if-does-not-exist :create )
     (let ((quadratic-error-sum 0))
       (dotimes (x n)
-	(let* ((random-concept (next-random-concept concept 0.5))
+	(let* ((random-concept (next-random-concept concepts position 0.5))
 	       (network-output (network-output network (cdr random-concept)))
-	       (network-error (network-error (car network-output) (car random-concept)))
-	       (quadratic-error (quadratic-error (car network-output) (car random-concept)))
+	       (network-error (network-error (car network-output)
+					     (equal (nth position concepts)
+						    (write-to-string (car random-concept)))))
+	       (quadratic-error (quadratic-error (car network-output)
+						 (equal (nth position concepts)
+							(write-to-string (car random-concept)))))
 	       (sqrt-mqe (sqrt-mqe quadratic-error-sum x)))
 	  (incf quadratic-error-sum quadratic-error)
 	  ;; save medium QE to a file
@@ -112,12 +121,11 @@
 	  (when (and (> x 100) (> quadratic-limit sqrt-mqe))
 	    (when *verbose*
 	      (format t "Quadratic limit reached~%Iterations: ~a~%" x))
-	    (return network))))
-      (when *verbose*
-	(format t "Max iterations reached~%(sqrt MQE) : ~a~%~%"
-		(sqrt-mqe quadratic-error-sum n)))))
+	    (return-from training-perceptron network))
+	  (when *verbose*
+	    (format t "Max iterations reached~%(sqrt MQE) : ~a~%~%"
+		    (sqrt-mqe quadratic-error-sum n)))))))
   network)
-
 
 (defun testing-networks-set (networks-set concepts n)
   ;; inputs : a trained network and a concept, n the number of tests to do
@@ -125,37 +133,52 @@
   ;; of the concept and a valid representation of somethingg that is not a representation of the
   ;; concept
   ;; outputs : the error rate on the testing set
-  (mapcar (lambda (concept)
-	    (refresh-streams concept 'testing)
-	    (let ((success 0))
-	      (dotimes (x n)
-		(let* ((next-concept (next-concept 'T concept 'testing))
-		      (network-output (networks-set-output networks-set
-							     concepts
-							     (cdr next-concept))))
-		  (when (equal network-output concept)
-		    (incf success))))
-	      (format t "Concept: ~a~12t Error rate: ~a%~%"
-		      concept (* (- 1 (/ success n)) 100.0))))
-	  concepts))
+  (dotimes  (position (length concepts))
+    (let ((success 0))
+      (dotimes (x n)
+	(let* ((next-concept (next-random-concept concepts position 1 'testing))
+	       (networks-set-output (networks-set-output networks-set
+						    concepts
+						    (cdr next-concept))))
+	  (when (equal networks-set-output (write-to-string (car next-concept)))
+	    (incf success))))
+      (format t "Concept: ~a~12t Error rate: ~a%~%"
+	      (nth position concepts) (* (- 1 (/ success n)) 100.0))))
+  concepts)
 
-(defun testing-perceptron (network concept threshold n)
+(defun testing-perceptron (network concepts position threshold n)
   ;;; inputs : a trained network and a concept, n the number of tests to do
   ;;; runs t time and compares the output of the network when submitted a compatible representation
   ;;; of the concept and a valid representation of somethingg that is not a representation of the
   ;;; concept
   ;;; outputs : the error rate on the testing set
-  (refresh-streams concept 'testing)
-  (let ((success 0))
+  (let ((true-positive 0)
+	(false-positive 0)
+	(true-negative 0)
+	(false-negative 0))
     (dotimes (x n)
-      (let* ((next-concept (next-random-concept concept 0.5 'testing))
+      (let* ((next-concept (next-random-concept concepts position 0.5 'testing))
 	     (network-output (car (network-output network (cdr next-concept)))))
 	(if (car next-concept)
-	    (when (> network-output threshold)
-	      (incf success))
-	    (when (< network-output threshold)
-	      (incf success)))))
-    (* (- 1 (/ success n)) 100.0)))
+	    (if (> network-output threshold)
+		(incf true-positive)
+		(incf false-positive))
+	    (if (< network-output threshold)
+		(incf true-negative)
+		(incf false-negative)))))
+    (list (precision true-positive false-positive)
+	  (true-positive-rate true-positive false-negative))))
+
+(defun precision (true-positive false-positive)
+  (if (and (eq 0 true-positive) (eq 0 false-positive))
+      0
+      (/ true-positive (+ true-positive false-positive 0.0))))
+
+(defun true-positive-rate (true-positive false-negative)
+  ;;; also called recall
+  (if (and (eq 0 false-negative) (eq 0 true-positive))
+      0
+      (/ true-positive (+ true-positive false-negative 0.0))))
 
 (defun networks-set-output (networks-set concepts input)
   (when *verbose* (display-image input))

@@ -1,4 +1,4 @@
-(declaim (optimize (speed 3) (safety 0) (debug 0)))
+(declaim (optimize (speed 0) (safety 3) (debug 3)))
 
 (in-package #:perceptron)
 
@@ -11,39 +11,45 @@
   ;;; Use the following commands to generate the test files (carefull with pathnames,
   ;;; you might want to change them
   (sort-images-by-labels '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
-  (sort-images-by-labels '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9") T))
+  (sort-images-by-labels '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9") T)
+  (unlabeled-to-binary))
+
+(defun unlabeled-to-binary ()
+  ;; this generates a binary file with the train-image file (bitmaps without labels)
+  (with-open-file (images (open "~/lisp/perceptron/test-images"))
+    (with-open-file (binary (open "~/lisp/perceptron/test-images-binary")
+			    :element-type '(unsigned-byte 8)
+			    :direction :output
+			    :if-exists :overwrite
+			    :if-does-not-exist :create )
+      (dotimes (x 10000)
+	(write-sequence (next-image-extraction (read-line images nil)) binary)))))
 
 (defun sort-images-by-labels (label-set &optional testing)
-    (mapcar #'(lambda (label)
-		(with-open-file (images (if testing
-					    (open "~/lisp/perceptron/images/test/test-images")
-					    (open "~/lisp/perceptron/images/train-images")))
-		  (with-open-file (image-labels (if testing
-						    (open "~/lisp/perceptron/images/test/test-labels")
-						    (open "~/lisp/perceptron/images/train-labels")))
-		    (with-open-file (stream  (format nil "lisp/perceptron/images/~a~a"
-						     (if testing "test/" "") label)
-					     :element-type '(unsigned-byte 8)
-					     :direction :output
-					     :if-exists :overwrite
-					     :if-does-not-exist :create )
-		      (with-open-file (not-stream  (format nil "lisp/perceptron/images/test/not-~a"
-							   (if testing "test/" "") label)
-						   :element-type '(unsigned-byte 8)
-						   :direction :output
-						   :if-exists :overwrite
-						   :if-does-not-exist :create )
-			(sort-images stream not-stream images image-labels label))))))
-	    label-set))
+  (mapcar #'(lambda (label)
+	      (with-open-file (images (if testing
+					  (open "~/lisp/perceptron/images/test/test-images")
+					  (open "~/lisp/perceptron/images/train-images")))
+		(with-open-file (image-labels (if testing
+						  (open "~/lisp/perceptron/images/test/test-labels")
+						  (open "~/lisp/perceptron/images/train-labels")))
+		  (with-open-file (stream  (format nil "lisp/perceptron/images/~a~a"
+						   (if testing "test/" "") label)
+					   :element-type '(unsigned-byte 8)
+					   :direction :output
+					   :if-exists :overwrite
+					   :if-does-not-exist :create )
+		    (sort-images stream images image-labels label)))))
+	  label-set)))
 
-(defun sort-images (stream not-stream images image-labels label)
+(defun sort-images (stream images image-labels label)
   ;;; 
   (let ((image (read-line images nil))
 	(image-label (read-line image-labels nil)))
     (when (and image image-label)
-      (let ((temp (if (equal image-label label) stream not-stream)))
-	(write-sequence (next-image-extraction image) temp))
-      (sort-images stream not-stream images image-labels label))))
+      (when (equal image-label label)
+	(write-sequence (next-image-extraction image) stream))
+      (sort-images stream images image-labels label))))
 
 (defun next-image-extraction (image)
   ;;; extracts the bitmap from the string and returns a list of integers
@@ -76,14 +82,13 @@
     (display-image (mapcar (lambda (pixel) (/ pixel 100))
 			      average-concept))))
 
-(defun network-to-console ()
+(defun network-to-console (position)
   ;;; print the trained network in *standard-output*
-  (let ((image (cdaar (cadr *networks-set*))))
-    (display-image image)))
+  (display-image (cdaar (nth position *networks-set*))))
 
 (defun network-to-file ()
   ;;; copy the trained network into a js file (in json format)
-  (with-open-file (stream "lisp/perceptron/images/perceptron.js"
+  (with-open-file (stream "lisp/perceptron/perceptron.js"
 			  :direction :output
 			  :if-exists :overwrite
 			  :if-does-not-exist :create )

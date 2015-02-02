@@ -1,51 +1,74 @@
+(declaim (optimize (speed 0) (safety 3) (debug 3)))
+
 ;;; Functions related to concepts
 ;;; File manipulation / get a concept to evaluate...
 
 (in-package #:perceptron)
 
-(defun refresh-stream (valid concept &optional testing)
+(defun open-streams (concepts)
+  (defparameter *concepts* (mapcar (lambda (concept)
+				    (open (format nil "~a~a" *pathname* concept)
+					  :element-type '(unsigned-byte 8)))
+				   concepts))
+  (defparameter *testing-concepts* (mapcar (lambda (concept)
+					     (open (format nil "~atest/~a" *pathname* concept)
+						   :element-type '(unsigned-byte 8)))
+					   concepts)))
+
+(defun close-streams ()
+  (mapcar #'close *concepts*)
+  (mapcar #'close *testing-concepts*))
+
+(defun refresh-stream (concepts concept-position &optional testing)
   ;;; close and reopen a stream
   ;;; used when reaching EOF
-  (if valid (close *concepts*) (close *not-concepts*))
-  (if valid
-      (setq *concepts*
-	    (open (format nil "~a~a~a" *pathname* (if testing "test/" "") concept)
-		  :element-type '(unsigned-byte 8)))
-      (setq *not-concepts*
-	    (open (format nil "~a~anot-~a" *pathname* (if testing "test/" "") concept)
-		  :element-type '(unsigned-byte 8)))))
+  (let ((stream (if testing *testing-concepts* *concepts*)))
+    (close (nth concept-position stream))
+    (setf (nth concept-position stream)
+	  (open (format nil "~a~a~a" *pathname* (if testing "test/" "") (nth concept-position
+									     concepts))
+		:element-type '(unsigned-byte 8)))))
 
-(defun refresh-streams (concept &optional testing)
-  ;;; refreshing both streams at the same time
-  ;;; used when testing (needs different set of concepts)
-  (refresh-stream 'T concept testing)
-  (refresh-stream nil concept testing))
+(defun get-stream (concept-position &optional testing)
+  (nth concept-position (if testing *testing-concepts* *concepts*)))
 
-(defun next-random-concept (concept positive-rate &optional testing)
+(defun next-random-concept (concepts concept-position positive-rate &optional testing)
   ;; returns a valid input of something representing the concept or not depending
   ;; of the random number. that way you can submit more right or more wrong by changing positive-rate
-  (if (< (random 1.0) positive-rate)
-      (next-concept T concept (if testing testing))
-      (next-concept nil concept (if testing testing))))
+  (when (> (random 1.0) positive-rate)
+    (setf concept-position (random (length concepts))))
+  (next-concept concepts concept-position (if testing testing)))
 
-(defun next-concept (valid concept &optional testing)
+(defun next-concept (concepts concept-position &optional testing)
   ;; input : a concept like "a" or "0"
   ;; ugly part : feeds on external streams and reload them when reaching EOF
   ;; output : an adapted representation of a valid input representing the concept
   (let ((next-concept (make-sequence 'list 784)))
     (handler-case (when (eq 0 (read-sequence next-concept
-					     (if valid *concepts* *not-concepts*)))
-		    (refresh-stream valid concept (if testing testing))
-		    (return-from  next-concept (next-concept valid concept (if testing testing))))
+					     (get-stream concept-position (if testing testing))))
+		    (refresh-stream concepts concept-position (if testing testing))
+		    (return-from  next-concept (next-concept concepts concept-position
+							     (if testing testing))))
       (stream-error ()
-	(refresh-stream valid concept (if testing testing))
+	(refresh-stream concepts concept-position (if testing testing))
 	(read-sequence next-concept
-		       (if valid *concepts* *not-concepts*))))
-    (cons valid (mapcar (lambda (x) (/ x 255.0)) next-concept))))
+		       (get-stream concept-position (if testing testing)))))
+    (cons concept-position (mapcar (lambda (x) (/ x 255.0)) next-concept))))
 
-(defun unknown-concept (stream)
+(defun unknown-concept-stream ()
+  (defparameter *unknown* (open "~/lisp/perceptron/test-images-binary"
+				:element-type '(unsigned-byte 8))))
+
+(defun unknown-concept ()
+  (unless *unknown* (setq *unknown* (unknown-concept-stream)))
   (let ((next-concept (make-sequence 'list 784)))
-    (read-sequence next-concept stream)
-    next-concept))
+    (read-sequence next-concept *unknown*)
+    (mapcar (lambda (x) (/ x 255.0)) next-concept)))
     
-  
+
+(defun test-concept (position)
+  (let ((concept (next-random-concept '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9")
+					position 0.5 'testing)))
+    (print (networks-set-output *networks-set* '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9") (cdr concept)
+				))
+    (car concept)))
