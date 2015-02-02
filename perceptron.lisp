@@ -153,25 +153,25 @@
   ;; of the concept and a valid representation of somethingg that is not a representation of the
   ;; concept
   ;; outputs : the error rate on the testing set
-  (time (let ((total-success 0))
-	  (dotimes  (position (length concepts))
-	    (let ((success 0))
-	      (dotimes (x n)
-		(let* ((next-concept (next-random-concept concepts position 1 'testing))
-		       (networks-set-output (networks-set-output networks-set
-								 concepts
-								 (cdr next-concept))))
-		  (when (equal networks-set-output (write-to-string (car next-concept)))
-		    (incf success)
-		    (incf total-success))))
-	      (format t "Concept: ~a~12t Error rate: ~a%~%"
-		      (nth position concepts) (* (- 1 (/ success
-							 n))
-						 100.0))))
-	  (format t "Global error rate: ~a%~%" (* (- 1 (/ total-success
-							  (* n (length concepts))))
-						  100.0)))))))
-  concepts)
+  (let ((total-success 0))
+    (dotimes  (position (length concepts))
+      (let ((success 0))
+	(dotimes (x n)
+	  (let* ((next-concept (next-random-concept concepts position 1 'testing))
+		 (networks-set-output (networks-set-output networks-set
+							   concepts
+							   (cdr next-concept))))
+	    (when (equal networks-set-output (write-to-string (car next-concept)))
+	      (incf success)
+	      (incf total-success))))
+	(format t "Concept: ~a~12t Error rate: ~a%~%"
+		(nth position concepts) (* (- 1 (/ success
+						   n))
+					   100.0))))
+    (format t "Global error rate: ~a%~%" (* (- 1 (/ total-success
+						    (* n (length concepts))))
+					    100.0)))
+concepts)
 
 (defun testing-perceptron (network concepts position threshold n)
   ;;; inputs : a trained network and a concept, n the number of tests to do
