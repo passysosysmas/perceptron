@@ -1,0 +1,142 @@
+
+<link href='http://fonts.googleapis.com/css?family=Source+Sans+Pro' rel='stylesheet' type='text/css'>
+
+<style>
+.container{
+width:95%;
+margin:auto;
+}
+.concept{
+width:300px;
+height:350px;
+
+float:left;
+}
+canvas{
+margin:auto;
+}
+
+h3{
+margin : auto;
+}
+h1,h3{
+text-align:center;
+font-family: 'Source Sans Pro';
+}
+
+</style>
+
+<h1>Représentation des poids de chaque perceptron</h1>
+
+<div class="container">
+
+<div class="concept">
+<h3>Concept "0"</h3>
+<canvas id="myCanvas0" width="280" height="280"
+style="border:1px solid #000000;">
+</canvas>
+</div>
+
+<div class="concept">
+<h3>Concept "1"</h3>
+<canvas id="myCanvas1" width="280" height="280"
+style="border:1px solid #000000;">
+</canvas>
+</div>
+
+<div class="concept">
+<h3>Concept "2"</h3>
+<canvas id="myCanvas2" width="280" height="280"
+style="border:1px solid #000000;">
+</canvas>
+</div>
+
+<div class="concept">
+<h3>Concept "3"</h3>
+<canvas id="myCanvas3" width="280" height="280"
+style="border:1px solid #000000;">
+</canvas>
+</div>
+
+<div class="concept">
+<h3>Concept "4"</h3>
+<canvas id="myCanvas4" width="280" height="280"
+style="border:1px solid #000000;">
+</canvas>
+</div>
+
+<div class="concept">
+<h3>Concept "5"</h3>
+<canvas id="myCanvas5" width="280" height="280"
+style="border:1px solid #000000;">
+</canvas>
+</div>
+
+<div class="concept">
+<h3>Concept "6"</h3>
+<canvas id="myCanvas6" width="280" height="280"
+style="border:1px solid #000000;">
+</canvas>
+</div>
+
+<div class="concept">
+<h3>Concept "7"</h3>
+<canvas id="myCanvas7" width="280" height="280"
+style="border:1px solid #000000;">
+</canvas>
+</div>
+
+<div class="concept">
+<h3>Concept "8"</h3>
+<canvas id="myCanvas8" width="280" height="280"
+style="border:1px solid #000000;">
+</canvas>
+</div>
+
+<div class="concept">
+<h3>Concept "9"</h3>
+<canvas id="myCanvas9" width="280" height="280"
+style="border:1px solid #000000;">
+</canvas>
+</div>
+
+</div>
+<script src=js/perceptron.js></script>
+<script>
+function rgb2hex(red, green, blue) {
+        var rgb = blue | (green << 8) | (red << 16);
+        return '#' + (0x1000000 + rgb).toString(16).slice(1)
+  }
+var toto = {"e":[5,6,6],};
+for(var index in perceptron){
+	
+	var c = document.getElementById("myCanvas"+index);
+	var ctx = c.getContext("2d");
+	var image = perceptron[index];
+	for(var i=0;i<=783;i++){
+		var pixel = image[i];
+		var red = 0;
+		var blue = 0;
+		if(pixel<0){
+			red=255;
+		}else{
+			blue=255;
+		}
+		var green = (pixel +1 ) * (255/2);
+		
+		pixel*=255;
+		pixel*=(pixel<0?-1:1);
+		
+		var col = rgb2hex(red,green,blue);
+		//var col = rgb2hex(255-pixel,255-pixel,255-pixel);
+		
+
+		//console.log(col);
+		ctx.fillStyle = col;
+		ctx.fillRect((i%28)*10,Math.floor(i/28)*10,10,10);
+		
+	}	
+	
+}
+
+</script>
