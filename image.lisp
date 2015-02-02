@@ -26,6 +26,19 @@
       (dotimes (x 10000)
 	(write-sequence (next-image-extraction (read-line images nil)) binary)))))
 
+(defun unlabeled-to-file ()
+  (setf *verbose* nil)
+  (unknown-concept-stream)
+  (with-open-file (stream  (format nil "lisp/perceptron/test-labels")
+			   :direction :output
+			   :if-exists :overwrite
+			   :if-does-not-exist :create )
+    (dotimes (x 10000)
+      (write-line (networks-set-output *networks-set*
+				       *concepts-labels*
+				       (cdr (unknown-concept)))
+		  stream))))
+
 (defun sort-images-by-labels (label-set &optional testing)
   (mapcar #'(lambda (label)
 	      (with-open-file (images (if testing
@@ -41,7 +54,7 @@
 					   :if-exists :overwrite
 					   :if-does-not-exist :create )
 		    (sort-images stream images image-labels label)))))
-	  label-set)))
+	  label-set))
 
 (defun sort-images (stream images image-labels label)
   ;;; 
@@ -69,7 +82,8 @@
        do (incf x)
 	 (format t "~a" (if (< 0.01 pixel) "." "#"))
 	 (when (eq 0 (mod x 28))
-	   (format t "~%")))))
+	   (format t "~%"))))
+  (format t "~%"))
 
 (defun display-average-image (concept)
   ;;; print the average form of 100 images of the same concept

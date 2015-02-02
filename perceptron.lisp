@@ -9,19 +9,18 @@
 
 (defun bootstraping ()
   ;;; you need to put the image files into separated folders (see README.txt)
-  (generate-files)
-  )
+  (generate-files))
 
 (defun main ()
-  ;;;'("0" "1" "2" "3" "4" "5" "6" "7" "8" "9")
+  (defparameter *concepts-labels* '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
   (defparameter *verbose* nil)
   (defparameter *pathname* "lisp/perceptron/images/")
-  (let ((network-config '(784 3))
-	(concepts  '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
+  (let ((network-config '(784))
+	(concepts  *concepts-labels*)
 	(activation-function "logistic")
-	(learning-rates '(0.3))
-	(training-set 10000) (testing-set 100)
-	(threshold 0.8) (quadratic-limit 0.07))
+	(learning-rates '(0.05))
+	(training-set 1000000) (testing-set 1000)
+	(threshold 0.8) (quadratic-limit 0.2))
     (open-streams concepts)
     (let ((networks-set (networks-set network-config concepts activation-function
 				      learning-rates threshold training-set
@@ -29,15 +28,14 @@
       (testing-networks-set networks-set concepts testing-set)
       (defparameter *networks-set* networks-set))
     (network-to-file)
+    (close *unknown*)
+    (unknown-concept-stream)
     (close-streams)))
 
 (defun test-concept ()
   (setf *verbose* T)
-  (let* ((concepts '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
-	 (concept (next-random-concept concepts (random (length concepts)) 1 'testing)))
-    (print (networks-set-output *networks-set* concepts (cdr concept)
-				))
-    (car concept)))
+  (let ((concept (unknown-concept)))
+    (networks-set-output *networks-set* *concepts-labels* (cdr concept))))
 
 (defun networks-set (network-config concepts
 		     activation-function learning-rates
@@ -82,10 +80,10 @@
 					  learning-rates threshold
 					  training-set testing-set
 					  quadratic-limit))
-	     (precision (car (testing-perceptron current-network concepts position
-						 threshold testing-set))))
-	(when (> precision best-error-rate)
-	  (setq best-error-rate precision)
+	     (recall (cdr (testing-perceptron current-network concepts position
+					      threshold testing-set))))
+	(when (> recall best-error-rate)
+	  (setq best-error-rate recall)
 	  (setq best-network current-network))))
     (perceptron best-network
 		concepts position activation-function '(0.35) threshold
@@ -142,6 +140,7 @@
 	  (when (and (> x 100) (> quadratic-limit sqrt-mqe))
 	    (when *verbose*
 	      (format t "Quadratic limit reached~%Iterations: ~a~%" x))
+	    (format t "~a reaching quadratic error after ~a iterations~%" (nth position concepts) x)
 	    (return-from training-perceptron network))
 	  (when *verbose*
 	    (format t "Max iterations reached~%(sqrt MQE) : ~a~%~%"
@@ -154,17 +153,24 @@
   ;; of the concept and a valid representation of somethingg that is not a representation of the
   ;; concept
   ;; outputs : the error rate on the testing set
-  (dotimes  (position (length concepts))
-    (let ((success 0))
-      (dotimes (x n)
-	(let* ((next-concept (next-random-concept concepts position 1 'testing))
-	       (networks-set-output (networks-set-output networks-set
-						    concepts
-						    (cdr next-concept))))
-	  (when (equal networks-set-output (write-to-string (car next-concept)))
-	    (incf success))))
-      (format t "Concept: ~a~12t Error rate: ~a%~%"
-	      (nth position concepts) (* (- 1 (/ success n)) 100.0))))
+  (time (let ((total-success 0))
+	  (dotimes  (position (length concepts))
+	    (let ((success 0))
+	      (dotimes (x n)
+		(let* ((next-concept (next-random-concept concepts position 1 'testing))
+		       (networks-set-output (networks-set-output networks-set
+								 concepts
+								 (cdr next-concept))))
+		  (when (equal networks-set-output (write-to-string (car next-concept)))
+		    (incf success)
+		    (incf total-success))))
+	      (format t "Concept: ~a~12t Error rate: ~a%~%"
+		      (nth position concepts) (* (- 1 (/ success
+							 n))
+						 100.0))))
+	  (format t "Global error rate: ~a%~%" (* (- 1 (/ total-success
+							  (* n (length concepts))))
+						  100.0)))))))
   concepts)
 
 (defun testing-perceptron (network concepts position threshold n)
@@ -187,7 +193,7 @@
 	    (if (< network-output threshold)
 		(incf true-negative)
 		(incf false-negative)))))
-    (list (precision true-positive false-positive)
+    (cons (precision true-positive false-positive)
 	  (true-positive-rate true-positive false-negative))))
 
 (defun precision (true-positive false-positive)
