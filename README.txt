@@ -20,8 +20,6 @@ To load package type :
 (in-package perceptron)
 
 
-
-
 To format the train-labels and train-images :
 
 In command line :
@@ -40,4 +38,6 @@ mv train-images-2 ~/lisp/perceptron/images/train-images
 
 Then in the REPL :
 
-(generate-files)
+(bootstrap) ;; generates the files
+(main) ;; generates a network with parameters you can change easely and saves a representation and statistics that can be displayed in javascript (perceptron.html)
+(test-concept) ;; shows the image in ASCII in the REPL and statistics from the networks

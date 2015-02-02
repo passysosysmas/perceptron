@@ -6,6 +6,7 @@
 ;;;; for the perceptron to process
 ;;;; There is also few functions to display various data related to the images/network
 
+;;;; TODO : pass labels and pathname as a parameter
 
 (defun generate-files ()
   ;;; Use the following commands to generate the test files (carefull with pathnames,

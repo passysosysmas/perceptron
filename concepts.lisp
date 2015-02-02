@@ -64,11 +64,3 @@
   (let ((next-concept (make-sequence 'list 784)))
     (read-sequence next-concept *unknown*)
     (mapcar (lambda (x) (/ x 255.0)) next-concept)))
-    
-
-(defun test-concept (position)
-  (let ((concept (next-random-concept '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9")
-					position 0.5 'testing)))
-    (print (networks-set-output *networks-set* '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9") (cdr concept)
-				))
-    (car concept)))

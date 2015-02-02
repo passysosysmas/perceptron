@@ -4,25 +4,46 @@
 ;;;; perceptron.lisp
 (in-package #:perceptron)
 
+;;;; TODO separate the different layers, have the higher level
+;;;; functions in a separate file for future evolutions
+
+(defun bootstraping ()
+  ;;; you need to put the image files into separated folders (see README.txt)
+  (generate-files)
+  )
+
 (defun main ()
   ;;;'("0" "1" "2" "3" "4" "5" "6" "7" "8" "9")
   (defparameter *verbose* nil)
   (defparameter *pathname* "lisp/perceptron/images/")
-  (let ((concepts  '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9")))
+  (let ((network-config '(784 3))
+	(concepts  '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
+	(activation-function "logistic")
+	(learning-rates '(0.3))
+	(training-set 10000) (testing-set 100)
+	(threshold 0.8) (quadratic-limit 0.07))
     (open-streams concepts)
-    (let ((networks-set (networks-set concepts)))
-      (testing-networks-set networks-set concepts 100)
+    (let ((networks-set (networks-set network-config concepts activation-function
+				      learning-rates threshold training-set
+				      testing-set quadratic-limit)))
+      (testing-networks-set networks-set concepts testing-set)
       (defparameter *networks-set* networks-set))
+    (network-to-file)
     (close-streams)))
 
-(defun networks-set (concepts)
+(defun test-concept ()
+  (setf *verbose* T)
+  (let* ((concepts '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
+	 (concept (next-random-concept concepts (random (length concepts)) 1 'testing)))
+    (print (networks-set-output *networks-set* concepts (cdr concept)
+				))
+    (car concept)))
+
+(defun networks-set (network-config concepts
+		     activation-function learning-rates
+		     threshold training-set testing-set quadratic-limit )
   ;;; generates a set of 10 perceptrons for the network
-  (let* ((network-config '(784 3))
-	 (activation-function "logistic")
-	 (learning-rates '(0.3))
-	 (training-set 10000) (testing-set 100)
-	 (threshold 0.8) (quadratic-limit 0.07)
-	 (network-set ()))
+  (let* ((network-set ()))
     (dotimes (position (length concepts))
       (push (best-perceptron network-config concepts position activation-function
 			     learning-rates threshold training-set
