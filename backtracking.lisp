@@ -3,71 +3,66 @@
 
 (in-package #:perceptron)
 
-(defun backtracking (network inputs output-error)
+(defun backtracking (perceptron inputs output-error)
   ;;; first get the gradients of the network
   ;;; then apply corrections
   ;;; return corrected network
-  (let ((network-gradients (network-gradients network inputs nil output-error)))
+  (let ((network-gradients (network-gradients perceptron inputs nil output-error)))
     (mapcar (lambda (layer layer-inputs layer-gradients)
-	      (backtracking-layer layer layer-inputs layer-gradients))
-	    network
+	      (backtracking-layer layer perceptron layer-inputs layer-gradients))
+	    (p-network perceptron)
 	    inputs
 	    network-gradients)))
 
 ;;; the backtracking apply corrections
-(defun backtracking-layer (layer inputs layer-gradients)
-  (mapcar (lambda (neuron gradient) (backtracking-neuron neuron inputs gradient))
+(defun backtracking-layer (layer perceptron inputs layer-gradients)
+  (mapcar (lambda (neuron gradient) (backtracking-neuron neuron perceptron inputs gradient))
 	  layer
 	  layer-gradients))
 
-(defun backtracking-neuron (neuron inputs gradient)
+(defun backtracking-neuron (neuron perceptron inputs gradient)
   (push 1 inputs)
   (let ((delta-weights (mapcar (lambda (input)
-				 (* *learning-rate* gradient input))  
+				 (* (p-learning-rate perceptron) gradient input))  
 			       inputs)))
     (mapcar #'+ neuron delta-weights)))
 
 ;;; the gradient functions calculates gradients through the network
-(defun network-gradients (network inputs previous-layer previous-gradients)
+(defun network-gradients (perceptron inputs previous-layer previous-gradients)
   ;; the network is reversed because we start at the output layer
   (setq inputs (reverse inputs))
   (reverse (mapcar (lambda (layer layer-inputs)
 		     (let ((layer-gradients (layer-gradients layer
+							     perceptron
 							     layer-inputs
 							     previous-layer
 							     previous-gradients)))
 		       (setq previous-layer layer)
 		       (setq previous-gradients layer-gradients)
 		       layer-gradients))
-		   (reverse network)
+		   (reverse (p-network perceptron))
 		   inputs)))
 
 
-(defun layer-gradients (layer layer-inputs previous-layer previous-gradients)
+(defun layer-gradients (layer perceptron layer-inputs previous-layer previous-gradients)
  (mapcar (lambda (neuron)
-		(let ((gradient (neuron-gradient neuron
-						 layer-inputs
-						 (mapcar #'car previous-layer)
-						 previous-gradients)))
-		  (setq previous-layer (mapcar #'cdr previous-layer))
-		  (when (not (car previous-layer))
-		    (setq previous-layer nil))
-		  gradient))
+	   (let ((gradient (neuron-gradient neuron
+					    perceptron
+					    layer-inputs
+					    (mapcar #'car previous-layer)
+					    previous-gradients)))
+	     (setq previous-layer (mapcar #'cdr previous-layer))
+	     (when (not (car previous-layer))
+	       (setq previous-layer nil))
+	     gradient))
 	 layer))
 
-
-(defun neuron-gradient (neuron inputs previous-weights previous-gradients)
+;;; TODO : put activation function in the config and call it with funcall
+(defun neuron-gradient (neuron perceptron inputs previous-weights previous-gradients)
   (* (if previous-weights
 	   (reduce #'+ (mapcar #'* previous-weights previous-gradients))
 	   previous-gradients)
-       (pd-activation-function (weighted-sum neuron inputs))))
-
-
-;;; different activation function are available
-;;; identity is terrible because the weighted-sum quickly gets way too high
-(defun pd-activation-function (weighted-sum)
-  (cond ((equal *activation-function* "identity") 1)
-	('T (pd-logistic-function weighted-sum))))
+       (pd-logistic-function (weighted-sum neuron inputs))))
 
 (defun pd-logistic-function (weighted-sum)
   ;; pure maths

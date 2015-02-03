@@ -83,41 +83,71 @@
 	 (format t "~a" (if (< 0.01 pixel) "." "#"))
 	 (when (eq 0 (mod x 28))
 	   (format t "~%"))))
-  (format t "~%"))
+  (format t "~%~%"))
 
 (defun display-average-image (concept)
   ;;; print the average form of 100 images of the same concept
   ;;; basically, it prints a potatoe
-  (refresh-streams concept)
+  (refresh-stream concept nil)
   (let ((average-concept (make-sequence 'list 784 :initial-element 0)))
     (dotimes (x 100)
       (setq average-concept (mapcar #'+
 				    average-concept
-				    (cdr (next-concept T concept)))))
+				    (cdr (next-concept concept nil)))))
     (display-image (mapcar (lambda (pixel) (/ pixel 100))
 			      average-concept))))
 
-(defun network-to-console (position)
-  ;;; print the trained network in *standard-output*
-  (display-image (cdaar (nth position *networks-set*))))
+(defun perceptron-to-console (perceptron)
+  (display-image (cdaar (p-network perceptron))))
 
-(defun network-to-file (network-config learning-rate momentum quadratic-limit)
+(defun network-to-console (concept position)
+  ;;; print the trained network in *standard-output*
+  (display-image (cdaar (p-network (nth position (gethash concept *meta-perceptron*))))))
+
+(defun save-networks-set (networks-set config)
   ;;; copy the trained network into a js file (in json format)
   (with-open-file (stream "lisp/perceptron/js/perceptron.js"
 			  :direction :output
 			  :if-exists :overwrite
 			  :if-does-not-exist :create )
-    (with-open-file (backup (format nil "lisp/perceptron/js/perceptron-~{~a-~}~a-~a-~a.js"
-				  network-config learning-rate momentum quadratic-limit)
+    (with-open-file (backup (format nil "lisp/perceptron/js/~{~a~^-~}/~a-~a-~a.js"
+				    (cf-network-config config)
+				    (cf-learning-rate config)
+				    (cf-momentum config)
+				    (cf-quadratic-limit config))
 			  :direction :output
-			  :if-exists :overwrite
+			  :if-exists nil
 			  :if-does-not-exist :create )
     (format stream "var perceptron = {")
     (format backup "var perceptron = {")
     (mapcar (lambda (perceptron label)
 	      (format stream "\"~a\": [~{~a~^, ~}], " label (cdaar perceptron))
 	      (format backup "\"~a\": [~{~a~^, ~}], " label (cdaar perceptron)))
-	    *networks-set*
+	    networks-set
 	    '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
     (write-char #\} stream)
     (write-char #\} backup))))
+
+;;TODO save the best previous perceptron for the label
+;; TODO use hashtable to store best perceptron for labels
+(defun save-perceptron (perceptron)
+   (with-open-file (stream "lisp/perceptron/js/perceptron.js"
+			  :direction :output
+			  :if-exists :overwrite
+			  :if-does-not-exist :create )
+    (with-open-file (stats (format nil "lisp/perceptron/js/perceptron.json")
+			  :direction :output
+			  :if-exists :overwrite
+			  :if-does-not-exist :create )
+      (format stream "var perceptron = {")
+      (format stats "{\"~a\": \"learning-rate\": ~a, \"momentum\": ~a, \"quadratic-limit\": ~a, \"quadratic-evolution\": [~{~a~^,~}]}, \"sqrt-mqe\": [~{~a~^,~}]},  \"quadratic-error\": [~{~a~^,~}]},"
+	      (p-concept-label perceptron)
+	      (p-momentum perceptron)
+	      (p-quadratic-limit perceptron)
+	      (p-learning-rate perceptron)
+	      (p-quadratic-evolution perceptron)
+	      (p-sqrt-mqe-evolution perceptron)
+	      (p-learning-rate-evolution perceptron))
+      (format stream "var perceptron = {\"~a\": [~{~a~^, ~}]}"
+	      (p-concept-label perceptron)
+	      (cdaar (p-network perceptron))))))
