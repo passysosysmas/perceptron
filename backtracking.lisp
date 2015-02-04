@@ -62,7 +62,7 @@
   (* (if previous-weights
 	   (reduce #'+ (mapcar #'* previous-weights previous-gradients))
 	   previous-gradients)
-       (pd-logistic-function (weighted-sum neuron inputs))))
+     (pd-logistic-function (weighted-sum neuron inputs))))
 
 (defun pd-logistic-function (weighted-sum)
   ;; pure maths

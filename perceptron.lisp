@@ -1,4 +1,4 @@
-() (declaim (optimize (speed 0) (safety 3) (debug 3)))
+(declaim (optimize (speed 0) (safety 3) (debug 3)))
 ;; add evolutionary strategies for learning rate
 
 ;;;; perceptron.lisp
@@ -14,7 +14,7 @@
   (network nil)
   (concepts '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
   (activation-function #'logistic-function)
-  (learning-rate 0.1 )
+  (learning-rate 0.01 )
   (momentum 0.1)
   (quadratic-limit 0.1)
   (threshold 0.8)
@@ -32,9 +32,9 @@
   ;;; you need to put the image files into separated folders (see README.txt)
   (generate-files))
 
-(defun main ()
-  (let ((perceptron (make-perceptron :concept-label "0"
-				     :network-config '(784))))
+(defun main (concept network-config generations)
+  (let ((perceptron (make-perceptron :concept-label concept
+				     :network-config network-config)))
     (setf (p-network perceptron)
 	  (network (p-network-config perceptron)))
     (open-streams (p-concepts perceptron))
@@ -42,12 +42,9 @@
 	    (p-network-config perceptron)
 	    (p-learning-rate perceptron)
 	    (p-momentum perceptron))
-    (setf perceptron (training-perceptron perceptron))
-    (testing-perceptron perceptron)
-    ;;(print perceptron)
+    (setf perceptron (best-perceptron perceptron generations))
     ;;(format t "~a~%" (car (test-concept perceptron)))
     (perceptron-to-console perceptron)
-    (push perceptron (gethash (p-concept-label perceptron) *meta-perceptron*))
     (statistics-perceptron perceptron)
     (save-perceptron perceptron)
     T
@@ -81,22 +78,22 @@
       (cons (random 1.0 )
 	    (neuron (- inputs 1)))))
 
-(defun best-perceptron (perceptron)
+(defun best-perceptron (perceptron generations)
   ;;; an exemple of what can be done with the perceptron
   (let ((temp-perceptron perceptron)
 	(best-error-rate -1))
-    (dotimes (x 10)
+    (dotimes (x generations)
       (setq temp-perceptron (make-perceptron
 			     :concept-label (p-concept-label perceptron)
 			     :network-config (p-network-config perceptron)))
       (setf (p-network temp-perceptron) (network (p-network-config perceptron)))
-
-      (setq temp-perceptron (training-perceptron temp-perceptron))
+      (setf temp-perceptron (training-perceptron temp-perceptron))
+      (setf temp-perceptron (testing-perceptron temp-perceptron))
       (let ((recall (true-positive-rate temp-perceptron)))
 	(when (> recall best-error-rate)
-	  (setq best-error-rate recall)
-	  (setf perceptron temp-perceptron)))
-      perceptron)))
+	  (setf best-error-rate recall)
+	  (setf perceptron temp-perceptron))))
+    perceptron))
 
 
 (defun training-perceptron (perceptron)
@@ -113,63 +110,54 @@
 	 (learning-rate-evolution ()))
     ;; most of the time is spent in this loop, increasing as with the number of iterataions
     ;; about 1 000 000 processor cycles are spent here
-    (with-open-file (file (format nil "lisp/perceptron/quadratic-error/~{~a~^-~}/~a-~a-~a-~a.csv"
-				  (p-network-config perceptron)
-				  (p-concept-label perceptron)
-				  learning-rate
-				  (p-momentum perceptron)
-				  (p-quadratic-limit perceptron))
-			  :direction :output :if-exists :overwrite :if-does-not-exist :create )
-      (dotimes (x (p-training-set perceptron))
-	(let* ((random-concept (next-random-concept (p-concept-label perceptron)
-						    (p-concepts perceptron) 0.5))
-	       (network-output (network-output (p-network perceptron) (cdr random-concept)))
-	       (network-error (network-error (car network-output)
-					     (equal (p-concept-label perceptron)
-						    (write-to-string (car random-concept)))))
-	       (quadratic-error (quadratic-error (car network-output)
-						 (equal (p-concept-label perceptron)
-							(write-to-string (car random-concept)))))
-	       (sqrt-mqe (sqrt-mqe quadratic-error-sum x)))
+    (dotimes (x (p-training-set perceptron))
+      (let* ((random-concept (next-random-concept (p-concept-label perceptron)
+						  (p-concepts perceptron) 0.5))
+	     (network-output (network-output (p-network perceptron) (cdr random-concept)))
+	     (network-error (network-error (car network-output)
+					   (equal (p-concept-label perceptron)
+						  (car random-concept))))
+	     (quadratic-error (quadratic-error (car network-output)
+					       (equal (p-concept-label perceptron)
+						      (write-to-string (car random-concept)))))
+	     (sqrt-mqe (sqrt-mqe quadratic-error-sum x)))
 					;(print network-output)
-	  (incf quadratic-error-sum quadratic-error)
-	  (incf evolution-quadratic-error-sum quadratic-error)
-	  ;; save medium QE to a file
-	  ;; about 16000, but writing in a file, might be a bottleneck
-	  (format file "~a,~a~%" sqrt-mqe network-error)
-	  (push quadratic-error quadratic-evolution)
-	  (push sqrt-mqe sqrt-mqe-evolution)
-	  (push learning-rate learning-rate-evolution)
+	(incf quadratic-error-sum quadratic-error)
+	(incf evolution-quadratic-error-sum quadratic-error)
+	;; save medium QE to a file
+	;; about 16000, but writing in a file, might be a bottleneck
+	(push quadratic-error quadratic-evolution)
+	(push sqrt-mqe sqrt-mqe-evolution)
+	(push learning-rate learning-rate-evolution)
 
 
-	  ;; start backtracking
-	  (setf (p-network perceptron)
-		(backtracking perceptron
-			      (append (list (cdr random-concept))
-				      (cdr network-output))
-			      network-error))
-	  (when (and (> x 100)(> (p-quadratic-limit perceptron) sqrt-mqe))
-	    (format t "Concept ~a reaching quadratic limit of ~a after ~a iterations~%"
-		    (p-concept-label perceptron)
-		    (p-quadratic-limit perceptron)
-		    x)
-	    (return-from training-perceptron perceptron))
-	  (when (eq 0 (mod x 100))
-	    (if (> (/ evolution-quadratic-error-sum 100)
-		   sqrt-mqe)
-		(incf learning-rate (/ (p-momentum perceptron) 100))
-		(decf learning-rate (/ (p-momentum perceptron) 100)))
-	    (setf evolution-quadratic-error-sum 0)))))
-    
-    (setf (p-quadratic-evolution perceptron) quadratic-evolution)
-    (setf (p-sqrt-mqe-evolution perceptron) sqrt-mqe-evolution)
-    (setf (p-learning-rate-evolution perceptron) learning-rate-evolution)
-    
+	;; start backtracking
+	(setf (p-network perceptron)
+	      (backtracking perceptron
+			    (append (list (cdr random-concept))
+				    (cdr network-output))
+			    network-error))
+	(when (and (> x 100)(> (p-quadratic-limit perceptron) sqrt-mqe))
+	  (format t "Concept ~a reaching quadratic limit of ~a after ~a iterations~%"
+		  (p-concept-label perceptron)
+		  (p-quadratic-limit perceptron)
+		  x)
+	  (return-from training-perceptron perceptron))
+	(when (eq 0 (mod x 1))
+	  (if (> (/ evolution-quadratic-error-sum 100)
+		 sqrt-mqe)
+	      (incf learning-rate (/ (p-momentum perceptron) 100))
+	      (decf learning-rate (/ (p-momentum perceptron) 100)))
+	  (setf evolution-quadratic-error-sum 0)))
+      (setf (p-quadratic-evolution perceptron) quadratic-evolution)
+      (setf (p-sqrt-mqe-evolution perceptron) sqrt-mqe-evolution)
+      (setf (p-learning-rate-evolution perceptron) learning-rate-evolution))
+     
     (when *verbose*
       (format t "Concept ~a reaching iteration limit ~%Sqrt MQE : ~a~%~%"
 	      (p-concept-label perceptron)
-	      (sqrt-mqe quadratic-error-sum (p-training-set perceptron))))
-    perceptron))
+	      (sqrt-mqe quadratic-error-sum (p-training-set perceptron)))))
+  perceptron)
 
 
 (defun testing-networks-set (networks-set concepts n)
@@ -217,8 +205,8 @@
 	      (incf (p-false-negative perceptron)))
 	  (if (< network-output (p-threshold perceptron))
 	      (incf (p-true-negative perceptron))
-	      (incf (p-false-positive perceptron))))
-      perceptron)))
+	      (incf (p-false-positive perceptron))))))
+  perceptron)
 
 (defun statistics-perceptron (perceptron)
   (format t "True postive: ~a    False positive: ~a~%True negative:  ~a   False negative: ~a~%Precision : ~a%   Recall : ~a%~%"

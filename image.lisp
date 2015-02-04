@@ -140,14 +140,16 @@
 			  :if-exists :overwrite
 			  :if-does-not-exist :create )
       (format stream "var perceptron = {")
-      (format stats "{\"~a\": \"learning-rate\": ~a, \"momentum\": ~a, \"quadratic-limit\": ~a, \"quadratic-evolution\": [~{~a~^,~}]}, \"sqrt-mqe\": [~{~a~^,~}]},  \"quadratic-error\": [~{~a~^,~}]},"
+      (format stats "{\"~a\": {\"learning-rate\": ~a, \"momentum\": ~a, \"quadratic-limit\": ~a, \"quadratic-evolution\": [~{~$~^,~}], \"sqrt-mqe\": [~{~$~^,~}],  \"quadratic-error\": [~{~$~^,~}]}}"
 	      (p-concept-label perceptron)
 	      (p-momentum perceptron)
 	      (p-quadratic-limit perceptron)
 	      (p-learning-rate perceptron)
 	      (p-quadratic-evolution perceptron)
 	      (p-sqrt-mqe-evolution perceptron)
-	      (p-learning-rate-evolution perceptron))
+	      (p-learning-rate-evolution perceptron)
+	      )
       (format stream "var perceptron = {\"~a\": [~{~a~^, ~}]}"
 	      (p-concept-label perceptron)
-	      (cdaar (p-network perceptron))))))
+	      (cdaar (p-network perceptron)))
+      (push perceptron (gethash (p-concept-label perceptron) *meta-perceptron*)))))
