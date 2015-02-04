@@ -34,9 +34,7 @@
 			   :if-exists :overwrite
 			   :if-does-not-exist :create )
     (dotimes (x 10000)
-      (write-line (networks-set-output *networks-set*
-				       *concepts-labels*
-				       (cdr (unknown-concept)))
+      (write-line (meta-perceptron-output (cdr (unknown-concept)))
 		  stream))))
 
 (defun sort-images-by-labels (label-set &optional testing)
@@ -104,52 +102,54 @@
   ;;; print the trained network in *standard-output*
   (display-image (cdaar (p-network (nth position (gethash concept *meta-perceptron*))))))
 
-(defun save-networks-set (networks-set config)
-  ;;; copy the trained network into a js file (in json format)
-  (with-open-file (stream "lisp/perceptron/js/perceptron.js"
-			  :direction :output
-			  :if-exists :overwrite
-			  :if-does-not-exist :create )
-    (with-open-file (backup (format nil "lisp/perceptron/js/~{~a~^-~}/~a-~a-~a.js"
-				    (cf-network-config config)
-				    (cf-learning-rate config)
-				    (cf-momentum config)
-				    (cf-quadratic-limit config))
-			  :direction :output
-			  :if-exists nil
-			  :if-does-not-exist :create )
-    (format stream "var perceptron = {")
-    (format backup "var perceptron = {")
-    (mapcar (lambda (perceptron label)
-	      (format stream "\"~a\": [~{~a~^, ~}], " label (cdaar perceptron))
-	      (format backup "\"~a\": [~{~a~^, ~}], " label (cdaar perceptron)))
-	    networks-set
-	    '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
-    (write-char #\} stream)
-    (write-char #\} backup))))
+(defun display-meta-perceptron ()
+  (maphash  (lambda (concept perceptron)
+	      (format t "Concept \"~a\":~%" concept)
+	      (statistics-perceptron perceptron))
+	    *meta-perceptron*))
 
-;;TODO save the best previous perceptron for the label
-;; TODO use hashtable to store best perceptron for labels
-(defun save-perceptron (perceptron)
-   (with-open-file (stream "lisp/perceptron/js/perceptron.js"
-			  :direction :output
-			  :if-exists :overwrite
-			  :if-does-not-exist :create )
-    (with-open-file (stats (format nil "lisp/perceptron/js/perceptron.json")
-			  :direction :output
-			  :if-exists :overwrite
-			  :if-does-not-exist :create )
-      (format stream "var perceptron = {")
-      (format stats "{\"~a\": {\"learning-rate\": ~a, \"momentum\": ~a, \"quadratic-limit\": ~a, \"quadratic-evolution\": [~{~$~^,~}], \"sqrt-mqe\": [~{~$~^,~}],  \"quadratic-error\": [~{~$~^,~}]}}"
-	      (p-concept-label perceptron)
-	      (p-momentum perceptron)
-	      (p-quadratic-limit perceptron)
-	      (p-learning-rate perceptron)
-	      (p-quadratic-evolution perceptron)
-	      (p-sqrt-mqe-evolution perceptron)
-	      (p-learning-rate-evolution perceptron)
-	      )
-      (format stream "var perceptron = {\"~a\": [~{~a~^, ~}]}"
-	      (p-concept-label perceptron)
-	      (cdaar (p-network perceptron)))
-      (push perceptron (gethash (p-concept-label perceptron) *meta-perceptron*)))))
+;;; could be improved by ordering concepts per rate
+(defun concept-mistakes (concept)
+  (format t "Perceptron for concept ~a makes the following misrecognitions:~%" concept)
+  (let* ((perceptron (gethash concept *meta-perceptron*))
+	 (mistakes (make-hash-table :test 'equal))
+	 (total (+ (p-true-positive perceptron)
+		   (p-true-negative perceptron)
+		   (p-false-positive perceptron)
+		   (p-false-negative perceptron))))
+    (mapcar (lambda (mistake)
+	      (if (gethash (car mistake) mistakes)
+		  (incf (gethash (car mistake) mistakes))
+		  (setf (gethash (car mistake) mistakes) 0)))
+	    (p-false-positive-concepts perceptron))
+    (maphash (lambda (label number)
+	       (format t "Concept ~a : ~$%~%" label (* 100 (/ number total))))
+	     mistakes))))
+
+(defun save-perceptron-to-json (concept)
+  (let ((perceptron (gethash concept *meta-perceptron*)))
+      (with-open-file (stats (format nil "lisp/perceptron/js/perceptron.json")
+			     :direction :output
+			     :if-exists :overwrite
+			     :if-does-not-exist :create )
+	(format stats "{\"~a\": {\"learning-rate\": ~a, \"momentum\": ~a, \"quadratic-limit\": ~a, \"quadratic-evolution\": [~{~$~^,~}], \"sqrt-mqe\": [~{~$~^,~}],  \"quadratic-error\": [~{~$~^,~}]}}"
+		(p-concept-label perceptron)
+		(p-momentum perceptron)
+		(p-quadratic-limit perceptron)
+		(p-learning-rate perceptron)
+		(p-quadratic-evolution perceptron)
+		(p-sqrt-mqe-evolution perceptron)
+		(p-learning-rate-evolution perceptron)))))
+
+(defun save-meta-perceptron-to-js (&optional (position 0))
+     (with-open-file (stream "lisp/perceptron/js/perceptron.js"
+			    :direction :output
+			    :if-exists :overwrite
+			    :if-does-not-exist :create )
+       (format stream "var perceptron = {")
+       (maphash (lambda (label perceptron)
+		  (format stream "\"~a\": [~{~a~^, ~}], "
+			  label
+			  (cdr (nth position (car (p-network perceptron))))))
+		*meta-perceptron*)
+       (format stream "}")))

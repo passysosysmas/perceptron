@@ -21,40 +21,47 @@
 	(open (format nil "~a~a" *pathname* concept)
 	      :element-type '(unsigned-byte 8))))
 
-(defun next-random-concept (concept concepts positive-rate &optional testing)
+(defun next-random-concept (perceptron positive-rate &optional mode)
   ;; returns a valid input of something representing the concept or not depending
   ;; of the random number. that way you can submit more right or more wrong by changing positive-rate
-  (let ((concept (if (> (random 1.0) positive-rate)
-		     (nth (random (length concepts)) concepts)
-		     concept)))
-    (cons concept (next-concept concept testing))))
+  (if (> (random 1.0) positive-rate)
+      (or (when (member  mode '(recall review)) (pop (p-false-positive-concepts perceptron)))
+	  (next-concept (nth (random (length (p-concepts perceptron)))
+			     (p-concepts perceptron))
+			(eq mode 'testing)))
+      (or (when (member mode '(precision review)) (pop (p-false-negative-concepts perceptron)))
+	  (next-concept (p-concept-label perceptron)
+			(eq mode 'testing)))))
 
-(defun next-concept (concept testing)
-  ;; input : a concept like "a" or "0"
+(defun next-concept (concept-label testing)
+  ;; input : a concept
+  ;; testing, relearning : booleans
   ;; ugly part : feeds on external streams and reload them when reaching EOF
   ;; output : an adapted representation of a valid input representing the concept
-   (let ((next-concept (make-sequence 'list 784)))
-     (handler-case (when (eq 0 (read-sequence next-concept
-					      (gethash (format nil "~a~a" (if testing "test-" "")
-							       concept)
-							 *streams*)))
-		     (refresh-stream concept testing)
-		     (return-from next-concept (next-concept concept testing)))
-       (type-error ()
-	 (refresh-stream concept testing)
-	 (read-sequence next-concept
-			(gethash (format nil "~a~a" (if testing "test-" "")
-							       concept)
-						       *streams*))))
-    (mapcar (lambda (x) (/ x 255.0)) next-concept)))
+  (let ((next-concept (make-sequence 'list 784)))
+    (handler-case (when (eq 0 (read-sequence next-concept
+					     (gethash (format nil "~a~a" (if testing "test-" "")
+							      concept-label)
+						      *streams*)))
+		    (refresh-stream concept-label testing)
+		    (return-from next-concept
+		      (next-concept concept-label testing)))
+      (type-error ()
+	(refresh-stream concept-label testing)
+	(read-sequence next-concept
+		       (gethash (format nil "~a~a" (if testing "test-" "")
+					concept-label)
+				*streams*))))
+    (cons concept-label (mapcar (lambda (x) (/ x 255.0)) next-concept))))
 
 
 
 (defun unknown-concept-stream ()
   (defparameter *unknown* (open "~/lisp/perceptron/test-images-binary"
 				:element-type '(unsigned-byte 8))))
-(defun unknown-concept ()
-  (unless *unknown* (setq *unknown* (unknown-concept-stream)))
+
+(defun unknown-concept (&optional stream)
+  (unless stream (setq stream *unknown*))
   (let ((next-concept (make-sequence 'list 784)))
-    (read-sequence next-concept *unknown*)
+    (read-sequence next-concept stream)
     (mapcar (lambda (x) (/ x 255.0)) next-concept)))

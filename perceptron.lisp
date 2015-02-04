@@ -14,25 +14,33 @@
   (network nil)
   (concepts '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
   (activation-function #'logistic-function)
-  (learning-rate 0.01 )
-  (momentum 0.1)
-  (quadratic-limit 0.1)
+  (learning-rate 0.5)
+  (momentum 0.01)
+  (quadratic-limit 0.2)
   (threshold 0.8)
   (training-set 50000)
-  (testing-set 100)
+  (testing-set 1000)
   (quadratic-evolution nil)
   (sqrt-mqe-evolution nil)
   (learning-rate-evolution nil)
   (true-positive 0)
   (true-negative 0)
   (false-positive 0)
-  (false-negative 0))
+  (false-negative 0)
+  (false-positive-concepts ())
+  (false-negative-concepts ()))
 	   
 (defun bootstraping ()
-  ;;; you need to put the image files into separated folders (see README.txt)
+  ;;; You need to put the image files into separated folders (see README.txt)
   (generate-files))
 
-(defun main (concept network-config generations)
+(defun learn-concepts (concepts)
+  ;;; This is the function to use if you want to learn multiple concepts at once
+  (loop for concept in concepts
+     do (learn concept '(784 3) 10 'precision)))
+
+(defun learn (concept network-config generations &optional mode)
+  ;;; This is the function to use you want to learn a single concept
   (let ((perceptron (make-perceptron :concept-label concept
 				     :network-config network-config)))
     (setf (p-network perceptron)
@@ -42,19 +50,65 @@
 	    (p-network-config perceptron)
 	    (p-learning-rate perceptron)
 	    (p-momentum perceptron))
-    (setf perceptron (best-perceptron perceptron generations))
-    ;;(format t "~a~%" (car (test-concept perceptron)))
+    (setf perceptron (best-perceptron perceptron generations mode))
+    (perceptron-to-console perceptron)
+    (statistics-perceptron perceptron)
+    (let ((best-perceptron (gethash (p-concept-label perceptron) *meta-perceptron*)))
+      (when (> (F1 perceptron) (if best-perceptron (F1 best-perceptron) 0))
+	(setf (gethash (p-concept-label perceptron) *meta-perceptron*) perceptron)))
+    T))
+
+(defun compare-concepts (concept1 concept2 network-config generations)
+  ;;; This is the function to you when you want to make a perceptron specialized in the distinction
+  ;;; of two concepts
+  (let ((perceptron (make-perceptron :concept-label concept1
+				     :concepts (list concept1 concept2)
+				     :network-config network-config
+				     :threshold 0.9)))
+    (setf (p-network perceptron)
+	  (network (p-network-config perceptron)))
+    (open-streams (p-concepts perceptron))
+    (format t "Network config: ~a~%Learning rate: ~a Momentum: ~a~%"
+	    (p-network-config perceptron)
+	    (p-learning-rate perceptron)
+	    (p-momentum perceptron))
+    (setf perceptron (best-perceptron perceptron generations 'review))
     (perceptron-to-console perceptron)
     (statistics-perceptron perceptron)
     (save-perceptron perceptron)
-    T
-      ))
+    T))
 
-(defun test-concept (perceptron)
+(defun test-concept ()
   (setf *verbose* T)
   (let ((concept (unknown-concept)))
     (display-image concept)
-    (network-output (p-network perceptron) concept)))
+    (meta-perceptron-output concept)))
+
+(defun testing-meta-perceptron (&optional (concepts '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9")))
+  (let ((global-count 0))
+    (loop for concept in concepts
+       do (let ((count 0))
+	    (dotimes (x 10000)
+	      (when (equal concept
+			   (car (meta-perceptron-output (cdr (next-concept concept 'testing)))))
+		(incf count)
+		(incf global-count)))
+	    (format t "10000 representation of ~a submitted with ~$% recognition rate~%"
+		    concept
+		    (/ count 100))))
+    (format t "Average success rate for all concepts: ~$%" (/ global-count (* 100
+									      (length concepts))))))
+
+(defun meta-perceptron-output (input)
+  (let ((max-label nil)
+	(max 0))
+    (maphash (lambda (label perceptron)
+	       (let ((result (car (network-output (p-network perceptron) input)))) 
+		 (when (> result max)
+		   (setf max-label label
+			 max result))))
+	     *meta-perceptron*)
+    (cons max-label max)))
 
 ;;; Constructors
 (defun network (networks-config) 
@@ -78,13 +132,15 @@
       (cons (random 1.0 )
 	    (neuron (- inputs 1)))))
 
-(defun best-perceptron (perceptron generations)
+(defun best-perceptron (perceptron generations mode)
   ;;; an exemple of what can be done with the perceptron
   (let ((temp-perceptron perceptron)
 	(best-error-rate -1))
     (dotimes (x generations)
       (setq temp-perceptron (make-perceptron
 			     :concept-label (p-concept-label perceptron)
+			     :concepts (p-concepts perceptron)
+			     :threshold (p-threshold perceptron)
 			     :network-config (p-network-config perceptron)))
       (setf (p-network temp-perceptron) (network (p-network-config perceptron)))
       (setf temp-perceptron (training-perceptron temp-perceptron))
@@ -92,11 +148,21 @@
       (let ((recall (true-positive-rate temp-perceptron)))
 	(when (> recall best-error-rate)
 	  (setf best-error-rate recall)
-	  (setf perceptron temp-perceptron))))
-    perceptron))
+	  (setf perceptron temp-perceptron)))))
+  (format t "Best perceptron selected :~%")
+  (statistics-perceptron perceptron)
+  (when mode
+    (format t "~%Starting extra-training to enhance ~a:~%"
+	    mode)
+    (setf (p-true-positive perceptron) 0
+	  (p-false-negative perceptron) 0
+	  (p-true-negative perceptron) 0
+	  (p-false-positive perceptron) 0
+	  perceptron (testing-perceptron (training-perceptron perceptron mode))))
+  perceptron)
 
 
-(defun training-perceptron (perceptron)
+(defun training-perceptron (perceptron &optional mode)
 ;;; inputs : a network and a concept, n the number of cycles
 ;;; runs n time the backtracking algorithm on a compatible representation of a
 ;;; representation of the concept AND a compatible representation of something that is
@@ -111,47 +177,58 @@
     ;; most of the time is spent in this loop, increasing as with the number of iterataions
     ;; about 1 000 000 processor cycles are spent here
     (dotimes (x (p-training-set perceptron))
-      (let* ((random-concept (next-random-concept (p-concept-label perceptron)
-						  (p-concepts perceptron) 0.5))
-	     (network-output (network-output (p-network perceptron) (cdr random-concept)))
+      (let* ((next-concept (next-random-concept perceptron 0.5 mode))
+	     (network-output (network-output (p-network perceptron) (cdr next-concept)))
 	     (network-error (network-error (car network-output)
 					   (equal (p-concept-label perceptron)
-						  (car random-concept))))
+						  (car next-concept))))
 	     (quadratic-error (quadratic-error (car network-output)
 					       (equal (p-concept-label perceptron)
-						      (write-to-string (car random-concept)))))
+						      (write-to-string (car next-concept)))))
 	     (sqrt-mqe (sqrt-mqe quadratic-error-sum x)))
-					;(print network-output)
+	;; updating statistics
 	(incf quadratic-error-sum quadratic-error)
 	(incf evolution-quadratic-error-sum quadratic-error)
-	;; save medium QE to a file
-	;; about 16000, but writing in a file, might be a bottleneck
+	;; collecting statistics
 	(push quadratic-error quadratic-evolution)
 	(push sqrt-mqe sqrt-mqe-evolution)
 	(push learning-rate learning-rate-evolution)
-
-
-	;; start backtracking
+	;; starting backtracking
 	(setf (p-network perceptron)
 	      (backtracking perceptron
-			    (append (list (cdr random-concept))
+			    (append (list (cdr next-concept))
 				    (cdr network-output))
 			    network-error))
+	(when mode
+	  (if (equal (p-concept-label perceptron) (car next-concept))
+	      (when (and (member mode '(review recall))
+			 (< (car network-output) (p-threshold perceptron)))
+		(push next-concept (p-false-negative-concepts perceptron)))
+	      (when (and (member mode '(review precision))
+			 (> (car network-output) (p-threshold perceptron)))
+		(push next-concept (p-false-positive-concepts perceptron)))))
+	
 	(when (and (> x 100)(> (p-quadratic-limit perceptron) sqrt-mqe))
-	  (format t "Concept ~a reaching quadratic limit of ~a after ~a iterations~%"
+  	  (format t "Concept ~a reaching quadratic limit of ~a after ~a iterations~%"
 		  (p-concept-label perceptron)
 		  (p-quadratic-limit perceptron)
 		  x)
+	  (nconc (p-quadratic-evolution perceptron) (average-stats quadratic-evolution x))
+	  (nconc (p-sqrt-mqe-evolution perceptron) (average-stats sqrt-mqe-evolution x))
+	  (nconc (p-learning-rate-evolution perceptron) (average-stats learning-rate-evolution x))
 	  (return-from training-perceptron perceptron))
 	(when (eq 0 (mod x 1))
 	  (if (> (/ evolution-quadratic-error-sum 100)
 		 sqrt-mqe)
 	      (incf learning-rate (/ (p-momentum perceptron) 100))
 	      (decf learning-rate (/ (p-momentum perceptron) 100)))
-	  (setf evolution-quadratic-error-sum 0)))
-      (setf (p-quadratic-evolution perceptron) quadratic-evolution)
-      (setf (p-sqrt-mqe-evolution perceptron) sqrt-mqe-evolution)
-      (setf (p-learning-rate-evolution perceptron) learning-rate-evolution))
+	  (setf evolution-quadratic-error-sum 0))))
+    (nconc (p-quadratic-evolution perceptron) (average-stats quadratic-evolution
+							    (p-training-set perceptron)))
+    (nconc (p-sqrt-mqe-evolution perceptron) (average-stats sqrt-mqe-evolution
+							    (p-training-set perceptron)))
+    (nconc (p-learning-rate-evolution perceptron) (average-stats learning-rate-evolution
+								 (p-training-set perceptron)))
      
     (when *verbose*
       (format t "Concept ~a reaching iteration limit ~%Sqrt MQE : ~a~%~%"
@@ -159,34 +236,15 @@
 	      (sqrt-mqe quadratic-error-sum (p-training-set perceptron)))))
   perceptron)
 
-
-(defun testing-networks-set (networks-set concepts n)
-  ;; inputs : a trained network and a concept, n the number of tests to do
-  ;; runs t time and compares the output of the network when submitted a compatible representation
-  ;; of the concept and a valid representation of somethingg that is not a representation of the
-  ;; concept
-  ;; outputs : the error rate on the testing set
-  (let ((total-success 0))
-    (dotimes  (position (length concepts))
-      (let ((success 0))
-	(loop for concept in concepts
-	     do (let* ((next-concept (next-random-concept concept
-						    concepts
-						    1 'testing))
-		 (networks-set-output (networks-set-output networks-set
-							   concepts
-							   (cdr next-concept))))
-	    (when (equal networks-set-output (write-to-string (car next-concept)))
-	      (incf success)
-	      (incf total-success)))
-	     (format t "Concept: ~a~12t Error rate: ~a%~%"
-		     concept (* (- 1 (/ success
-					n))
-				100.0)))))
-    (format t "Global error rate: ~a%~%" (* (- 1 (/ total-success
-						    (* n
-						       (length concepts))))
-					    100.0))))
+(defun average-stats (points nb-points)
+  (let ((stepping (/ nb-points 1000))
+	(sum 0)
+	(new-points ()))
+    (dotimes (x nb-points)
+      (incf sum (pop points))
+      (when (eq 0 (mod x stepping))
+	(push (/ sum stepping) new-points)))
+    new-points))
 
 (defun testing-perceptron (perceptron)
   ;;; inputs : a trained network and a concept, n the number of tests to do
@@ -195,11 +253,9 @@
   ;;; concept
   ;;; outputs : the error rate on the testing set
   (dotimes (x (p-testing-set perceptron))
-    (let* ((next-concept (next-random-concept (p-concept-label perceptron)
-					      (p-concepts perceptron)
-					      0.5 'testing))
+    (let* ((next-concept (next-random-concept perceptron 0.5 'testing))
 	   (network-output (car (network-output (p-network perceptron) (cdr next-concept)))))
-      (if (eq (p-concept-label perceptron) (car next-concept))
+      (if (equal (p-concept-label perceptron) (car next-concept))
 	  (if (> network-output (p-threshold perceptron))
 	      (incf (p-true-positive perceptron))
 	      (incf (p-false-negative perceptron)))
@@ -209,13 +265,19 @@
   perceptron)
 
 (defun statistics-perceptron (perceptron)
-  (format t "True postive: ~a    False positive: ~a~%True negative:  ~a   False negative: ~a~%Precision : ~a%   Recall : ~a%~%"
+  (format t "True postive: ~a    False positive: ~a~%True negative:  ~a   False negative: ~a~%Precision : ~a%   Recall : ~a%    F1 : ~a%~%"
 	  (p-true-positive perceptron)
 	  (p-false-positive perceptron)
 	  (p-true-negative perceptron)
 	  (p-false-negative perceptron)
 	  (precision perceptron)
-	  (true-positive-rate perceptron)))
+	  (true-positive-rate perceptron)
+	  (F1 perceptron)))
+
+(defun F1 (perceptron)
+  (* 100 (/ (* 2 (p-true-positive perceptron))
+	    (+ (* 2.0 (p-true-positive perceptron))
+	       (p-false-positive perceptron) (p-false-negative perceptron)))))
 
 (defun precision (perceptron)
   (if (and (eq 0 (p-true-positive perceptron)) (eq 0 (p-false-positive perceptron)))
@@ -229,21 +291,6 @@
       0
       (* 100 (/ (p-true-positive perceptron)
 		(+ (p-true-positive perceptron) (p-false-negative perceptron) 0.0)))))
-
-(defun networks-set-output (networks-set concepts input &optional detailed)
-()  (when *verbose* (display-image input))
-  (let ((outputs (mapcar (lambda (output concept)
-			   (when *verbose*
-			     (format t "Concept ~a : ~a%~%" concept
-						   (if (> output 0.0001) (* 100 output) "< 0.01")))
-			   output)
-		 (mapcar (lambda (network)
-			   (car (network-output network input)))
-			 networks-set)
-		 concepts)))
-    (if detailed
-	outputs
-	(nth (position (reduce #'max outputs) outputs) concepts))))
 
 (defun network-output (network input)
   ;;; returns the output of the network for a particular input consed with
